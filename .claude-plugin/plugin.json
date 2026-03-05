@@ -1,0 +1,12 @@
+{
+  "name": "codacy-skills",
+  "description": "Codacy skills for Claude Code: query issues, enrich code reviews, and configure Codacy for your project.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Codacy"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/codacy/codacy-skills",
+  "repository": "https://github.com/codacy/codacy-skills",
+  "keywords": ["codacy", "code-quality", "code-review", "security"]
+}
