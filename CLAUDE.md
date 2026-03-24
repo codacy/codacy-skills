@@ -70,6 +70,7 @@ Helps with Codacy.
 | `codacy-cli` | Use the Codacy CLI: authentication, commands, help system |
 | `codacy-code-review` | Enrich code reviews with Codacy data |
 | `configure-codacy` | Tailor Codacy config to the project, reduce noise |
+| `setup-coverage` | Set up test coverage reporting and upload to Codacy |
 
 ## Keeping this project up to date
 

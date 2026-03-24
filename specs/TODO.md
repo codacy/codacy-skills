@@ -20,3 +20,4 @@ When a task is completed, move it to the DONE section.
 - Add a skill to enrich code reviews with Codacy data - code-review.md
 - Add a skill to improve Codacy configuration - configure-codacy.md
 - Add reanalysis support to skills (codacy-cli, configure-codacy, codacy-code-review)
+- Add a skill to set up test coverage reporting - setup-coverage.md

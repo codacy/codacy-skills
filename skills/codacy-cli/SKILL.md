@@ -1,6 +1,6 @@
 ---
 name: codacy-cli
-description: Uses the Codacy CLI to query repositories, issues, security findings, pull requests, tools, and patterns on Codacy Cloud. Use when the user asks about Codacy data, wants to run Codacy commands, check code issues, browse security findings, inspect a pull request analysis, or configure tools and patterns.
+description: Uses the Codacy CLI to query repositories, issues, security findings, pull requests, tools, and patterns on Codacy Cloud. Use when the user asks about remote Codacy data, check existing code issues, browse existing security findings, inspect a pull request analysis, or configure tools and patterns.
 license: MIT
 metadata:
   author: Codacy
@@ -9,7 +9,7 @@ metadata:
 
 # Codacy CLI
 
-The Codacy CLI (`codacy`) is the command-line interface for Codacy Cloud. Use it whenever the user wants to interact with Codacy data.
+The Codacy CLI (`codacy`) is the command-line interface for Codacy Cloud. Use it whenever the user wants to interact with remote Codacy data.
 
 ## Setup
 
@@ -17,9 +17,14 @@ The Codacy CLI (`codacy`) is the command-line interface for Codacy Cloud. Use it
 # Install
 npm install -g @codacy/codacy-cloud-cli
 
-# Authenticate — required for all commands
+# Authenticate — 3 options:
+# 1. Set the `CODACY_API_TOKEN` environment variable
 export CODACY_API_TOKEN=<token>
-# Obtain tokens: Codacy > My Account > Access Management > Account API Tokens
+# 2. Use the `codacy login` command (interactive login)
+codacy login
+# 3. Use the `codacy login` command (with token input)
+codacy login --token <token>
+# Obtain tokens: Codacy > My Account > Access Management > Account API Tokens (https://app.codacy.com/account/access-management)
 
 # Verify
 codacy info
@@ -168,6 +173,10 @@ codacy patterns gh my-org my-repo pylint --search W0123
 codacy pattern gh my-org my-repo eslint no-unused-vars --enable
 codacy pattern gh my-org my-repo eslint no-unused-vars --disable
 codacy pattern gh my-org my-repo eslint max-len --parameter max=120
+
+# Enable or disable all patterns matching specific filters
+codacy patterns gh my-org my-repo eslint --categories Security --severities Critical,High --enable-all
+codacy patterns gh my-org my-repo pylint --categories CodeStyle --severities Minor --disable-all
 ```
 
 Pattern search tip: Codacy pattern IDs combine tool prefix and original ID. Use `--search` with the original ID to find them:

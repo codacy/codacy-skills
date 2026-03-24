@@ -9,6 +9,7 @@ A collection of [Claude skills](https://www.anthropic.com/news/introducing-agent
 | [`codacy-cli`](codacy-cli/) | Use the Codacy CLI to query issues, findings, pull requests, tools, and patterns |
 | [`codacy-code-review`](codacy-code-review/) | Enrich code reviews with Codacy data — issues, coverage, security, duplication |
 | [`configure-codacy`](configure-codacy/) | Tailor Codacy configuration to your project and reduce noise |
+| [`setup-coverage`](setup-coverage/) | Set up test coverage reporting and upload to Codacy |
 
 ## Requirements
 
