@@ -10,6 +10,7 @@ A collection of [Claude skills](https://www.anthropic.com/news/introducing-agent
 | [`codacy-code-review`](codacy-code-review/) | Enrich code reviews with Codacy data — issues, coverage, security, duplication |
 | [`configure-codacy`](configure-codacy/) | Tailor Codacy configuration to your project and reduce noise |
 | [`setup-coverage`](setup-coverage/) | Set up test coverage reporting and upload to Codacy |
+| [`analysis-cli`](analysis-cli/) | Run local static analysis using the Codacy Analysis CLI |
 
 ## Requirements
 

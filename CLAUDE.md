@@ -71,6 +71,7 @@ Helps with Codacy.
 | `codacy-code-review` | Enrich code reviews with Codacy data |
 | `configure-codacy` | Tailor Codacy config to the project, reduce noise |
 | `setup-coverage` | Set up test coverage reporting and upload to Codacy |
+| `analysis-cli` | Run local static analysis using the Codacy Analysis CLI |
 
 ## Keeping this project up to date
 

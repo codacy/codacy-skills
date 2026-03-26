@@ -30,6 +30,8 @@ codacy login --token <token>
 codacy info
 ```
 
+**Shared session:** The Cloud CLI and the Analysis CLI (`codacy-analysis`) share the same credentials at `~/.codacy/credentials`. Logging in or out with either CLI applies to both — there is no need to authenticate separately.
+
 ## Getting help
 
 The CLI is the authoritative source of truth. Always use `--help` to discover available commands, options, and current behavior:
