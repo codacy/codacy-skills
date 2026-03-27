@@ -1,5 +1,5 @@
 ---
-name: analysis-cli
+name: codacy-analysis-cli
 description: Uses the Codacy Analysis CLI to run local static analysis on repositories or specific files. Handles installation, initialization, dependency management, dry-runs, and analysis with JSON output. Use when the user asks to analyze code locally, run static analysis, check for issues, scan for security problems, or set up local Codacy analysis.
 license: MIT
 metadata:
