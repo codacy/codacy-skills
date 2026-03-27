@@ -4,7 +4,7 @@ description: Uses the Codacy Analysis CLI to run local static analysis on reposi
 license: MIT
 metadata:
   author: Codacy
-  version: 1.0.0
+  version: 1.2.0
 ---
 
 # Codacy Analysis CLI

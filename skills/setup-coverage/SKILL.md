@@ -4,7 +4,7 @@ description: Sets up test coverage reporting in a repository and configures uplo
 license: MIT
 metadata:
   author: Codacy
-  version: 1.0.0
+  version: 1.2.0
 ---
 
 # Setup Coverage

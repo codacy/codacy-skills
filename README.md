@@ -6,16 +6,17 @@ A collection of [Claude skills](https://www.anthropic.com/news/introducing-agent
 
 | Skill | Description |
 |-------|-------------|
-| [`codacy-cli`](codacy-cli/) | Use the Codacy CLI to query issues, findings, pull requests, tools, and patterns |
-| [`codacy-code-review`](codacy-code-review/) | Enrich code reviews with Codacy data — issues, coverage, security, duplication |
-| [`configure-codacy`](configure-codacy/) | Tailor Codacy configuration to your project and reduce noise |
-| [`setup-coverage`](setup-coverage/) | Set up test coverage reporting and upload to Codacy |
-| [`analysis-cli`](analysis-cli/) | Run local static analysis using the Codacy Analysis CLI |
+| [`codacy-cli`](skills/codacy-cli/SKILL.md) | Use the Codacy CLI to query issues, findings, pull requests, tools, and patterns |
+| [`codacy-code-review`](skills/codacy-code-review/SKILL.md) | Enrich code reviews with Codacy data — issues, coverage, security, duplication |
+| [`configure-codacy`](skills/configure-codacy/SKILL.md) | Tailor Codacy configuration to your project and reduce noise |
+| [`setup-coverage`](skills/setup-coverage/SKILL.md) | Set up test coverage reporting and upload to Codacy |
+| [`codacy-analysis-cli`](skills/codacy-analysis-cli/SKILL.md) | Run local static analysis using the Codacy Analysis CLI |
 
 ## Requirements
 
 - [Codacy CLI](https://github.com/codacy/codacy-cloud-cli) installed (`npm install -g @codacy/codacy-cloud-cli`)
-- `CODACY_API_TOKEN` environment variable set (obtain from Codacy > My Account > Access Management > Account API Tokens)
+- [Codacy Analysis CLI](https://www.npmjs.com/package/@codacy/analysis-cli) installed (`npm install -g @codacy/analysis-cli`)
+- `CODACY_API_TOKEN` environment variable set (obtain from Codacy > My Account > Access Management > Account API Tokens) or use the `codacy login` command (interactive login)
 
 ## Installation
 

@@ -1,6 +1,5 @@
 {
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "codacy",
+"name": "codacy",
   "owner": {
     "name": "Codacy"
   },
@@ -11,14 +10,14 @@
     {
       "name": "codacy-skills",
       "description": "Codacy skills for Claude Code: query issues, enrich code reviews, and configure Codacy for your project.",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "author": {
         "name": "Codacy"
       },
       "license": "MIT",
       "source": {
         "source": "url",
-        "url": "https://github.com/codacy/codacy-skills.git"
+        "url": "https://github.com/codacy/codacy-skills.git#new-skills"
       }
     }
   ]
