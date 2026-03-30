@@ -1,15 +1,15 @@
 ---
-name: codacy-cli
-description: Uses the Codacy CLI to query repositories, issues, security findings, pull requests, tools, and patterns on Codacy Cloud. Use when the user asks about remote Codacy data, check existing code issues, browse existing security findings, inspect a pull request analysis, or configure tools and patterns.
+name: codacy-cloud-cli
+description: Uses the Codacy Cloud CLI to query repositories, issues, security findings, pull requests, tools, and patterns on Codacy Cloud. Use whenever the user mentions Codacy, asks about code quality metrics, wants to check issues or findings in a repo, inspect a pull request analysis, browse security vulnerabilities, enable or disable tools, search patterns, trigger a reanalysis, or interact with any remote Codacy data — even if they don't say "Codacy CLI" explicitly.
 license: MIT
 metadata:
   author: Codacy
-  version: 1.2.0
+  version: 1.3.0
 ---
 
-# Codacy CLI
+# Codacy Cloud CLI
 
-The Codacy CLI (`codacy`) is the command-line interface for Codacy Cloud. Use it whenever the user wants to interact with remote Codacy data.
+The Codacy Cloud CLI (`codacy`) is the command-line interface for Codacy Cloud. Use it whenever the user wants to interact with remote Codacy data. This is a different tool from the Codacy Analysis CLI (`codacy-analysis`), which runs static analysis locally.
 
 ## Setup
 

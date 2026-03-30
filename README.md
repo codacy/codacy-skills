@@ -6,7 +6,7 @@ A collection of [Claude skills](https://www.anthropic.com/news/introducing-agent
 
 | Skill | Description |
 |-------|-------------|
-| [`codacy-cli`](skills/codacy-cli/SKILL.md) | Use the Codacy CLI to query issues, findings, pull requests, tools, and patterns |
+| [`codacy-cloud-cli`](skills/codacy-cloud-cli/SKILL.md) | Use the Codacy Cloud CLI to query issues, findings, pull requests, tools, and patterns |
 | [`codacy-code-review`](skills/codacy-code-review/SKILL.md) | Enrich code reviews with Codacy data — issues, coverage, security, duplication |
 | [`configure-codacy`](skills/configure-codacy/SKILL.md) | Tailor Codacy configuration to your project and reduce noise |
 | [`setup-coverage`](skills/setup-coverage/SKILL.md) | Set up test coverage reporting and upload to Codacy |
@@ -39,33 +39,46 @@ claude plugin install codacy-skills@codacy
 
 ### Claude.ai
 
-1. Download the skill folder you want (e.g. `codacy-cli/`)
+1. Download the skill folder you want (e.g. `codacy-cloud-cli/`)
 2. Zip it
 3. Go to Claude.ai > Settings > Capabilities > Skills > Upload skill
 
-## Working locally
+## Local development
 
-To test changes without installing, load the plugin directly with the `--plugin-dir` flag:
-
-```sh
-claude --plugin-dir ./codacy-skills
-```
-
-Or if you're already inside the repo directory:
+If you installed the plugin from the marketplace, Claude Code will use the published version — not your local edits. To test local changes, use `--plugin-dir` to load the plugin directly from your working copy:
 
 ```sh
+# from the repo directory
 claude --plugin-dir .
+
+# or from anywhere, using the path
+claude --plugin-dir /path/to/codacy-skills
 ```
 
-Skills are available as namespaced commands inside that session:
+This bypasses the marketplace entirely. Your local `SKILL.md` files are what Claude sees.
 
-```
-/codacy-skills:codacy-cli
-/codacy-skills:codacy-code-review
-/codacy-skills:configure-codacy
+### Development workflow
+
+1. Start Claude Code with `--plugin-dir` as above
+2. Edit your skill files under `skills/`
+3. Run `/reload-plugins` inside the session to pick up changes (no restart needed)
+4. Test your skills
+
+### Avoiding conflicts with the marketplace version
+
+If you have the marketplace plugin installed and want to be sure you're always hitting local code, uninstall the marketplace copy:
+
+```sh
+claude plugin uninstall codacy-skills@codacy
 ```
 
-Restart the Claude session to pick up any edits to `SKILL.md` files.
+Reinstall it when you're done developing:
+
+```sh
+claude plugin install codacy-skills@codacy
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for more on testing and submitting changes.
 
 ## Contributing
 

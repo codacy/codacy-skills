@@ -10,6 +10,8 @@ Codacy supports the following coverage report formats per language:
 | Go | `go test` | Go cover profile | Requires `--force-coverage-parser go` |
 | Java | JaCoCo | JaCoCo XML | `jacoco*.xml` |
 | Java | Cobertura | Cobertura XML | `cobertura.xml` |
+| Kotlin | JaCoCo | JaCoCo XML | `jacoco*.xml` |
+| Kotlin (Android) | JaCoCo | JaCoCo XML | `report.xml` (in coverage report dir) |
 | JavaScript/TypeScript | Istanbul / NYC / c8 | LCOV | `lcov.info`, `lcov.dat`, `*.lcov` |
 | PHP | PHPUnit | Clover XML or PHPUnit XML | `clover.xml` or `coverage-xml/index.xml` |
 | Python | Coverage.py | Cobertura XML | `cobertura.xml` |

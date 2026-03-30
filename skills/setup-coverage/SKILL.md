@@ -1,6 +1,6 @@
 ---
 name: setup-coverage
-description: Sets up test coverage reporting in a repository and configures upload to Codacy. Detects testing frameworks, CI/CD pipelines, and coverage gaps, then adds the missing pieces to generate and upload coverage reports. Use when the user wants to set up coverage, add coverage reporting, integrate coverage with Codacy, or fix missing coverage uploads.
+description: Sets up test coverage reporting in a repository and configures upload to Codacy. Detects testing frameworks, CI/CD pipelines, and coverage gaps, then adds the missing pieces to generate and upload coverage reports. Use whenever the user wants to set up coverage, add coverage reporting, integrate coverage with Codacy, fix missing coverage uploads, troubleshoot coverage not showing up, or configure CI to send coverage data. Also trigger when the user mentions test coverage, code coverage, coverage reports, or wants to know why Codacy shows no coverage for their repo.
 license: MIT
 metadata:
   author: Codacy
@@ -36,7 +36,9 @@ Scan the repository to identify:
 - **Test frameworks** (look for test directories, test files, framework configs):
   - JavaScript/TypeScript: Jest, Vitest, Mocha, NYC/Istanbul, c8
   - Python: pytest, unittest, coverage.py
-  - Java/Kotlin: JUnit, JaCoCo, Maven Surefire/Failsafe
+  - Java: JUnit, JaCoCo, Maven Surefire/Failsafe
+  - Kotlin: JUnit, JaCoCo (Gradle or Maven)
+  - Android: JUnit, JaCoCo, Espresso, `createDebugCoverageReport`
   - Go: native `go test`
   - Ruby: RSpec, SimpleCov, Minitest
   - C#/.NET: xUnit, NUnit, MSTest, Coverlet, dotCover
@@ -133,6 +135,35 @@ plugins { id 'jacoco' }
 jacocoTestReport { dependsOn test }
 ```
 Run: `./gradlew test jacocoTestReport`
+
+**Kotlin (Gradle + JaCoCo):**
+```gradle
+plugins { id 'jacoco' }
+jacocoTestReport {
+    dependsOn test
+    reports { xml.required = true }
+}
+```
+Run: `./gradlew test jacocoTestReport`
+
+Report location: `build/reports/jacoco/test/jacocoTestReport.xml`
+
+**Kotlin (Maven + JaCoCo):**
+Same as Java Maven + JaCoCo setup above — JaCoCo supports Kotlin bytecode natively.
+
+**Android (Gradle + JaCoCo):**
+```gradle
+android {
+    buildTypes {
+        debug { testCoverageEnabled true }
+    }
+}
+```
+Run: `./gradlew createDebugCoverageReport`
+
+Report location: `app/build/reports/coverage/debug/report.xml`
+
+For multi-module Android projects, use a merged report or partial uploads (see [references/coverage-upload.md](references/coverage-upload.md)).
 
 **Go:**
 ```bash

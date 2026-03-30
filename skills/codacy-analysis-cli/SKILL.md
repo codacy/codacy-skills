@@ -1,10 +1,10 @@
 ---
 name: codacy-analysis-cli
-description: Uses the Codacy Analysis CLI to run local static analysis on repositories or specific files. Handles installation, initialization, dependency management, dry-runs, and analysis with JSON output. Use when the user asks to analyze code locally, run static analysis, check for issues, scan for security problems, or set up local Codacy analysis.
+description: Uses the Codacy Analysis CLI to run local static analysis on repositories or specific files. Handles installation, initialization, dependency management, dry-runs, and analysis with JSON output. Use whenever the user wants to analyze code locally, run static analysis, scan for bugs or security issues, lint files, check code quality without pushing to Codacy, or run tools like ESLint, Ruff, Semgrep, RuboCop, or any other supported analyzer on their machine. Also trigger when the user asks to analyze staged changes, scan a PR locally, or set up local Codacy analysis.
 license: MIT
 metadata:
   author: Codacy
-  version: 1.2.0
+  version: 1.3.0
 ---
 
 # Codacy Analysis CLI
@@ -65,7 +65,7 @@ The analyzed repository is **never modified outside of `.codacy/`**. The `.codac
 
 ### Key files
 
-- `.codacy/codacy.config.json` — Main configuration: tools, patterns, excludes, metadata
+- `.codacy/codacy.config.json` — Main configuration: tools, patterns, excludes, metadata. See [references/config-format.md](references/config-format.md) for the full schema
 - `.codacy/generated/<ToolId>/` — Materialized tool-specific configs (gitignored)
 - `~/.codacy/credentials` — Stored API token
 - `~/.codacy/logs/` — Structured logs (JSON lines, rotated at 10 MB)
@@ -79,9 +79,6 @@ Used with `init --remote`:
 | `gh` | GitHub |
 | `gl` | GitLab |
 | `bb` | Bitbucket |
-| `ghe` | GitHub Enterprise |
-| `gle` | GitLab Enterprise |
-| `bbe` | Bitbucket Enterprise |
 
 ## Analysis workflow
 
@@ -126,13 +123,15 @@ All modes create `.codacy/codacy.config.json` in the repo root. If a `.codacy.ya
 
 #### Updating an existing configuration
 
-When the config already exists and you want to refresh it (e.g., after adding new languages or files):
+When the config was initialized with `--remote` and you want to re-sync with the remote Codacy configuration:
 
 ```bash
 codacy-analysis update-config
 ```
 
-This re-runs the same init mode that was originally used (stored in `metadata.source`). For remote configs, it re-fetches from the same Codacy repository.
+This re-fetches the configuration from the same Codacy repository used during init.
+
+**Only use `update-config` with `--remote` configs.** For configs initialized with `--default` or bare `init`, `update-config` re-runs the original init mode, which would overwrite any manual changes you've made to the config file.
 
 ### Step 2: Inspect tool availability (dry-run)
 
@@ -152,6 +151,8 @@ codacy-analysis analyze --inspect --output-format json | jq '.capability.ready[]
 codacy-analysis analyze --inspect --output-format json | jq '.capability.unavailable[] | {toolId, reason, remediation}'
 ```
 
+**Important:** `--inspect` and `--install-dependencies` are mutually exclusive. Use `--inspect` first to check readiness, then `--install-dependencies` to install and run in a single step.
+
 **Decision point:**
 - If all needed tools are in `capability.ready` → skip to Step 4
 - If tools are in `capability.unavailable` → proceed to Step 3
@@ -165,12 +166,6 @@ codacy-analysis analyze --install-dependencies --output-format json
 ```
 
 This installs missing tools and then runs analysis in a single command. The installed binaries go to `~/.codacy/` (machine-scoped, reused across repositories).
-
-**Dry-run install check** — combine `--inspect` with `--install-dependencies` to install without running analysis:
-
-```bash
-codacy-analysis analyze --inspect --install-dependencies --output-format json
-```
 
 **Last resort: manual installation** — if `--install-dependencies` fails for a specific tool, install it manually on the machine (e.g., `brew install shellcheck`, `pip install ruff`). See [references/supported-tools.md](references/supported-tools.md) for tool details.
 
@@ -214,6 +209,23 @@ codacy-analysis analyze --tool Ruff --tool Bandit --output-format json
 # Combine with file targeting
 codacy-analysis analyze --tool ESLint9 --files "src/**/*.ts" --output-format json
 ```
+
+#### Git-aware scoping
+
+Analyze only the code that changed, instead of the full repository:
+
+```bash
+# Only files staged for commit
+codacy-analysis analyze --staged --output-format json
+
+# Changes relative to the current branch's merge base (uncommitted + committed)
+codacy-analysis analyze --diff --output-format json
+
+# Changes in a pull request (compares against the PR's target branch)
+codacy-analysis analyze --pr --output-format json
+```
+
+These flags work with `--tool`, `--files`, and all other analyze options. When combined with `--files`, the intersection is used (files that match both the git scope and the file filter).
 
 #### Performance tuning
 
@@ -289,8 +301,14 @@ codacy-analysis analyze --install-dependencies --output-format json
 ### Scan only changed files (e.g., before a commit)
 
 ```bash
-# Get changed files from git, pass them to --files
-codacy-analysis analyze --files $(git diff --name-only HEAD) --output-format json
+# Staged files only (pre-commit check)
+codacy-analysis analyze --staged --output-format json
+
+# All changes on the current branch
+codacy-analysis analyze --diff --output-format json
+
+# Changes in a pull request
+codacy-analysis analyze --pr --output-format json
 ```
 
 ### Reproduce Codacy remote analysis locally
@@ -317,7 +335,13 @@ codacy-analysis analyze --output-format json
 ### Run only security-focused tools
 
 ```bash
-codacy-analysis analyze --tool Bandit --tool Trivy --tool Semgrep --tool Checkov --output-format json
+codacy-analysis analyze --tool Bandit --tool Brakeman --tool Trivy --tool Semgrep --tool Checkov --output-format json
+```
+
+### Analyze a Ruby project
+
+```bash
+codacy-analysis analyze --tool RuboCop --tool Reek --tool Brakeman --output-format json
 ```
 
 ## Troubleshooting

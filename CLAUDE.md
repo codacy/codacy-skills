@@ -67,7 +67,7 @@ Helps with Codacy.
 
 | Skill | Purpose |
 |-------|---------|
-| `codacy-cli` | Use the Codacy CLI: authentication, commands, help system |
+| `codacy-cloud-cli` | Use the Codacy Cloud CLI: authentication, commands, help system |
 | `codacy-code-review` | Enrich code reviews with Codacy data |
 | `configure-codacy` | Tailor Codacy config to the project, reduce noise |
 | `setup-coverage` | Set up test coverage reporting and upload to Codacy |
@@ -78,7 +78,7 @@ Helps with Codacy.
 When making changes:
 1. Update `README.md` if skills are added, removed, or renamed
 2. Bump `version` in the skill's YAML frontmatter metadata when its instructions change
-3. If the Codacy CLI adds new commands, update `skills/codacy-cli/SKILL.md` and any affected skills
+3. If the Codacy CLI adds new commands, update `skills/codacy-cloud-cli/SKILL.md` and any affected skills
 
 ## Codacy CLI basics
 
