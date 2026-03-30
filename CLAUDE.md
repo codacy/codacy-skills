@@ -11,8 +11,6 @@ This is a collection of [Claude skills](https://www.anthropic.com/news/introduci
 ├── CONTRIBUTING.md         # How to contribute
 ├── LICENSE                 # MIT
 ├── CODE_OF_CONDUCT.md      # Community standards
-├── SPECS/                  # Specs and task list
-│   └── todo.md             # Task tracker — keep updated
 ├── .claude-plugin/         # Plugin manifest
 │   ├── plugin.json         # Plugin metadata
 │   └── marketplace.json    # Marketplace catalog
@@ -67,18 +65,18 @@ Helps with Codacy.
 
 | Skill | Purpose |
 |-------|---------|
-| `codacy-cli` | Use the Codacy CLI: authentication, commands, help system |
+| `codacy-cloud-cli` | Use the Codacy Cloud CLI: authentication, commands, help system |
 | `codacy-code-review` | Enrich code reviews with Codacy data |
 | `configure-codacy` | Tailor Codacy config to the project, reduce noise |
 | `setup-coverage` | Set up test coverage reporting and upload to Codacy |
+| `codacy-analysis-cli` | Run local static analysis using the Codacy Analysis CLI |
 
 ## Keeping this project up to date
 
 When making changes:
-1. Update `SPECS/todo.md` — move completed tasks to the DONE section
-2. Update `README.md` if skills are added, removed, or renamed
-3. Bump `version` in the skill's YAML frontmatter metadata when its instructions change
-4. If the Codacy CLI adds new commands, update `skills/codacy-cli/SKILL.md` and any affected skills
+1. Update `README.md` if skills are added, removed, or renamed
+2. Bump `version` in the skill's YAML frontmatter metadata when its instructions change
+3. If the Codacy CLI adds new commands, update `skills/codacy-cloud-cli/SKILL.md` and any affected skills
 
 ## Codacy CLI basics
 
