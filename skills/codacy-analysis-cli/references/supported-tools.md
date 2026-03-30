@@ -11,7 +11,7 @@ The Codacy Analysis CLI ships with the following tool adapters. Use the **Tool I
 | `Ruff` | Ruff | Python |
 | `cppcheck` | Cppcheck | C, C++ |
 | `Trivy` | Trivy | Multi-language |
-| `Semgrep` | Opengrep | 30+ languages |
+| `Semgrep` | Opengrep (Semgrep-compatible) | 30+ languages |
 | `Stylelint` | Stylelint | CSS, SCSS, Less |
 | `spectral` | Spectral | OpenAPI, AsyncAPI |
 | `ESLint9` | ESLint 9 | JS, TS, JSX, TSX, Vue |
@@ -27,6 +27,23 @@ The Codacy Analysis CLI ships with the following tool adapters. Use the **Tool I
 | `Reek` | Reek | Ruby |
 | `Brakeman` | Brakeman | Ruby |
 
+
+## Tool IDs must match exactly
+
+Use the exact ID from the table above — not just the tool name. IDs are case-sensitive and may include version suffixes or naming conventions that differ from the tool's common name:
+
+```bash
+# Correct
+codacy-analysis analyze --tool Ruff --output-format json
+codacy-analysis analyze --tool ESLint9 --output-format json
+codacy-analysis analyze --tool PyLintPython3 --output-format json
+
+# Wrong — these will not match
+codacy-analysis analyze --tool ruff          # wrong case
+codacy-analysis analyze --tool eslint        # missing version suffix
+codacy-analysis analyze --tool pylint        # wrong ID entirely (correct: PyLintPython3)
+codacy-analysis analyze --tool rubocop       # wrong case (correct: RuboCop)
+```
 
 ## Restricting to specific tools
 

@@ -11,8 +11,6 @@ This is a collection of [Claude skills](https://www.anthropic.com/news/introduci
 ├── CONTRIBUTING.md         # How to contribute
 ├── LICENSE                 # MIT
 ├── CODE_OF_CONDUCT.md      # Community standards
-├── SPECS/                  # Specs and task list
-│   └── todo.md             # Task tracker — keep updated
 ├── .claude-plugin/         # Plugin manifest
 │   ├── plugin.json         # Plugin metadata
 │   └── marketplace.json    # Marketplace catalog
