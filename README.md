@@ -24,22 +24,12 @@ Compatible with Claude Code, OpenAI Codex, GitHub Copilot, Gemini CLI, and any a
 
 ### Claude Code (recommended)
 
-Install all Codacy skills in one step via the plugin marketplace:
-
 ```sh
 claude plugin marketplace add codacy/codacy-skills
 claude plugin install codacy-skills@codacy
 ```
 
-Claude Code pulls updates automatically whenever you run `claude plugin update`. No manual steps needed to stay on the latest version.
-
-Or install from a local clone:
-
-```sh
-git clone https://github.com/codacy/codacy-skills
-claude plugin marketplace add ./codacy-skills
-claude plugin install codacy-skills@codacy
-```
+Run `claude plugin update` to stay on the latest version.
 
 ### Claude.ai
 
@@ -49,79 +39,33 @@ claude plugin install codacy-skills@codacy
 
 ### OpenAI Codex
 
-Codex discovers skills from `.agents/skills/` directories following the [Agent Skills](https://agentskills.io/) standard. The `SKILL.md` files in this repository are fully compatible.
-
-Clone the repo and symlink the skills directory into your project or home directory:
+This repository follows the [Agent Skills](https://agentskills.io/) standard. Codex discovers skills from `.agents/skills/` — the `.agents/skills/` directory in this repo already points at each skill via symlinks, so cloning is enough:
 
 ```sh
 git clone https://github.com/codacy/codacy-skills ~/.codacy-skills
 
-# Per-project (recommended)
-mkdir -p .agents/skills
-ln -s ~/.codacy-skills/skills/codacy-cloud-cli .agents/skills/codacy-cloud-cli
-ln -s ~/.codacy-skills/skills/codacy-code-review .agents/skills/codacy-code-review
+# Per-project
+ln -s ~/.codacy-skills/.agents/skills .agents/skills
 
-# Or install all skills globally
-mkdir -p ~/.agents/skills
-ln -s ~/.codacy-skills/skills/* ~/.agents/skills/
+# Or globally
+ln -s ~/.codacy-skills/.agents/skills ~/.agents/skills
 ```
 
-To get updates, pull the latest changes:
-
-```sh
-git -C ~/.codacy-skills pull
-```
-
-If your Codex setup uses an `AGENTS.md` fallback instead of `.agents/skills/`, copy or symlink [`agents/AGENTS.md`](agents/AGENTS.md) to your repo root:
-
-```sh
-cp ~/.codacy-skills/agents/AGENTS.md ./AGENTS.md
-# or
-ln -s ~/.codacy-skills/agents/AGENTS.md ./AGENTS.md
-```
+Run `git -C ~/.codacy-skills pull` to get updates.
 
 ### GitHub Copilot
 
-GitHub Copilot coding agent reads `AGENTS.md` from your repository root. Copy the pre-built bundle into your project:
+Copilot's coding agent reads `AGENTS.md` from your repository root:
 
 ```sh
-curl -o AGENTS.md https://raw.githubusercontent.com/codacy/codacy-skills/master/agents/AGENTS.md
+curl -o AGENTS.md https://raw.githubusercontent.com/codacy/codacy-skills/master/AGENTS.md
 ```
-
-Or add it via a symlink if you've cloned the repo locally:
-
-```sh
-git clone https://github.com/codacy/codacy-skills ~/.codacy-skills
-ln -s ~/.codacy-skills/agents/AGENTS.md ./AGENTS.md
-```
-
-To pull in updates later:
-
-```sh
-git -C ~/.codacy-skills pull
-# then re-copy or re-symlink AGENTS.md if needed
-```
-
-Alternatively, paste the skill instructions into your project's `.github/copilot-instructions.md` to give Copilot persistent context across all sessions.
 
 ### Gemini CLI
-
-This repository includes `gemini-extension.json` for Gemini CLI integration.
-
-Install from the GitHub URL:
 
 ```sh
 gemini extensions install https://github.com/codacy/codacy-skills.git --consent
 ```
-
-Or from a local clone:
-
-```sh
-git clone https://github.com/codacy/codacy-skills
-gemini extensions install ./codacy-skills --consent
-```
-
-See the [Gemini CLI extensions docs](https://geminicli.com/docs/extensions/#installing-an-extension) for more help.
 
 ## Local development
 
@@ -156,12 +100,6 @@ Reinstall it when you're done developing:
 
 ```sh
 claude plugin install codacy-skills@codacy
-```
-
-After editing skills, regenerate the Codex/Copilot bundle to keep it in sync:
-
-```sh
-python scripts/generate_agents.py
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more on testing and submitting changes.

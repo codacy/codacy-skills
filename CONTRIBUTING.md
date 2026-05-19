@@ -64,12 +64,4 @@ claude plugin uninstall codacy-skills@codacy
 
 When the Codacy CLI adds new commands or changes behavior, update the affected skill(s) and bump the `version` in the frontmatter metadata.
 
-## Keeping the Codex/Copilot bundle in sync
-
-`agents/AGENTS.md` is a pre-built bundle of all skill descriptions for agents that don't support the `.agents/skills/` directory standard (Codex fallback, GitHub Copilot, Gemini CLI). After adding or significantly updating a skill, regenerate it:
-
-```sh
-python scripts/generate_agents.py
-```
-
-Commit the updated `agents/AGENTS.md` alongside your skill changes.
+If you add a new skill, also add a row to `AGENTS.md` at the repo root so Codex and Copilot users see it.
