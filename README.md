@@ -1,6 +1,8 @@
-# Codacy Skills for Claude
+# Codacy Skills
 
-A collection of [Claude skills](https://www.anthropic.com/news/introducing-agent-skills) that teach Claude how to use the [Codacy CLI](https://github.com/codacy/codacy-cloud-cli) to improve code quality workflows.
+A collection of skills that teach your AI coding assistant how to use the [Codacy CLI](https://github.com/codacy/codacy-cloud-cli) to improve code quality workflows.
+
+Compatible with Claude Code, OpenAI Codex, GitHub Copilot, Gemini CLI, and any agent that supports the [Agent Skills](https://agentskills.io/) standard.
 
 ## Skills
 
@@ -22,26 +24,48 @@ A collection of [Claude skills](https://www.anthropic.com/news/introducing-agent
 
 ### Claude Code (recommended)
 
-Install all Codacy skills in one step via the plugin marketplace:
-
 ```sh
 claude plugin marketplace add codacy/codacy-skills
 claude plugin install codacy-skills@codacy
 ```
 
-Or install from a local clone:
-
-```sh
-git clone https://github.com/codacy/codacy-skills
-claude plugin marketplace add ./codacy-skills
-claude plugin install codacy-skills@codacy
-```
+Run `claude plugin update` to stay on the latest version.
 
 ### Claude.ai
 
 1. Download the skill folder you want (e.g. `codacy-cloud-cli/`)
 2. Zip it
 3. Go to Claude.ai > Settings > Capabilities > Skills > Upload skill
+
+### OpenAI Codex
+
+This repository follows the [Agent Skills](https://agentskills.io/) standard. Codex discovers skills from `.agents/skills/` — the `.agents/skills/` directory in this repo already points at each skill via symlinks, so cloning is enough:
+
+```sh
+git clone https://github.com/codacy/codacy-skills ~/.codacy-skills
+
+# Per-project
+ln -s ~/.codacy-skills/.agents/skills .agents/skills
+
+# Or globally
+ln -s ~/.codacy-skills/.agents/skills ~/.agents/skills
+```
+
+Run `git -C ~/.codacy-skills pull` to get updates.
+
+### GitHub Copilot
+
+Copilot's coding agent reads `AGENTS.md` from your repository root:
+
+```sh
+curl -o AGENTS.md https://raw.githubusercontent.com/codacy/codacy-skills/master/AGENTS.md
+```
+
+### Gemini CLI
+
+```sh
+gemini extensions install https://github.com/codacy/codacy-skills.git --consent
+```
 
 ## Local development
 

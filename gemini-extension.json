@@ -1,0 +1,6 @@
+{
+    "name": "codacy-skills",
+    "description": "Codacy skills for Gemini CLI: query issues, enrich code reviews, investigate security findings, and configure Codacy for your project.",
+    "version": "1.0.0",
+    "contextFileName": "agents/AGENTS.md"
+}

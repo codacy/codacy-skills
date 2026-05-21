@@ -63,3 +63,5 @@ claude plugin uninstall codacy-skills@codacy
 ## Updating existing skills
 
 When the Codacy CLI adds new commands or changes behavior, update the affected skill(s) and bump the `version` in the frontmatter metadata.
+
+If you add a new skill, also add a row to `AGENTS.md` at the repo root so Codex and Copilot users see it.
