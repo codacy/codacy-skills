@@ -4,7 +4,7 @@ description: Uses the Codacy Cloud CLI to query repositories, issues, security f
 license: MIT
 metadata:
   author: Codacy
-  version: 1.3.0
+  version: 1.4.0
 ---
 
 # Codacy Cloud CLI
@@ -186,6 +186,20 @@ Pattern search tip: Codacy pattern IDs combine tool prefix and original ID. Use 
 codacy patterns gh my-org my-repo semgrep --search HttpGetHTTPRequest
 codacy patterns gh my-org my-repo pylint --search W0123
 ```
+
+### Importing configuration
+
+```bash
+# Import tool and pattern configuration from a local config file
+codacy tools gh my-org my-repo --import                          # imports from .codacy/codacy.config.json (default path)
+codacy tools gh my-org my-repo --import ./custom-config.json     # imports from a custom path
+codacy tools gh my-org my-repo --import -y                       # skip confirmation prompt
+codacy tools gh my-org my-repo --import --force -y               # unlink coding standard first, then import
+```
+
+The `--import` flag reads a local `.codacy/codacy.config.json` (or a specified path) and applies the tool and pattern configuration to the Codacy Cloud repository. Use `-y` (`--skip-approval`) to skip the interactive confirmation. Use `--force` to unlink the repository from its Coding Standard before importing — this is required when org-level standards block pattern changes.
+
+**Note:** The `.codacy/codacy.config.json` file is for local analysis only. Committing it to the repository does NOT affect Codacy Cloud. The `--import` command is the only way to sync local config to Cloud.
 
 ## Common workflows
 
