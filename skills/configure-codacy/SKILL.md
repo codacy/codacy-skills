@@ -20,7 +20,7 @@ Both CLIs share credentials at `~/.codacy/credentials`, so a single login covers
 
 ## How configuration works
 
-All configuration is done locally via `.codacy/codacy.config.json`. Edit the file, run analysis, see results instantly — no push or cloud reanalysis needed. Once the configuration is tuned, can be imported it to Codacy Cloud in one step.
+All configuration is done locally via `.codacy/codacy.config.json`. Edit the file, run analysis, see results instantly — no push or cloud reanalysis needed. Once tuned, the configuration can be imported to Codacy Cloud in one step.
 
 The key principle: **start broad, then cut noise using data**. Initialize with maximum pattern coverage via `init --auto`, run analysis to see the full issue landscape, then use the severity/category distribution to decide what to disable or tune.
 
@@ -68,10 +68,10 @@ Derive the provider, organization, and repository name from the git remote URL:
 - `gitlab.com` → provider `gl`
 - `bitbucket.org` → provider `bb`
 
-**CLI output caveat:** Both `codacy` and `codacy-analysis` CLIs write progress lines (e.g., `- Fetching tools...`, `- Fetching issues...`) to stdout before the actual JSON output. When piping CLI output directly to `jq`, the progress line causes a parse error. Always strip the progress line first with `tail -n +2`:
+**CLI output caveat:** Both `codacy` and `codacy-analysis` CLIs write progress lines (e.g., `- Fetching tools...`, `- Fetching issues...`) to stderr before the actual JSON output. When piping CLI output directly to `jq`, redirect stderr to avoid parse errors:
 
 ```bash
-codacy repository <provider> <org> <repo> --output json 2>&1 | tail -n +2 | jq '...'
+codacy repository <provider> <org> <repo> --output json 2>/dev/null | jq '...'
 ```
 
 Check Cloud status:
@@ -81,7 +81,7 @@ codacy repository <provider> <org> <repo> --output json
 
 If this succeeds, the repo is on Codacy Cloud. Also list enabled tools to identify cloud-only tools later:
 ```bash
-codacy tools <provider> <org> <repo> --output json 2>&1 | tail -n +2 | jq '[.[] | select(.settings.isEnabled == true) | {name, isClientSide}]'
+codacy tools <provider> <org> <repo> --output json 2>/dev/null | jq '[.[] | select(.settings.isEnabled == true) | {name, isClientSide}]'
 ```
 
 If it fails (repo not on Codacy, no auth, or no Cloud CLI), note that cloud features will be skipped — the local workflow is fully self-contained. Set the invocation mode to local-only (see "Invocation modes" section).
@@ -118,7 +118,7 @@ jq '.issues | length' /tmp/codacy-remote-results.json
 jq '.metadata.durationMs' /tmp/codacy-remote-results.json
 ```
 
-Also check for cloud-only tools — tools enabled in Cloud but not in the local Analysis CLI's supported tool list (jackson, markdownlint, shellcheck, Hadolint, Ruff, cppcheck, Trivy, Semgrep, Stylelint, spectral, ESLint9, flawfinder, Bandit, PyLintPython3, Checkov, Lizard, Checkstyle, PMD7, detekt, RuboCop, Reek, Brakeman). If cloud-only tools exist and have issues, fetch them:
+Also check for cloud-only tools — tools enabled in Cloud but not available in the local Analysis CLI. Get the local CLI's supported tools via `codacy-analysis info`, then compare against the Cloud-enabled tools list above. Any Cloud-enabled tool not in the `info` output is cloud-only (e.g., SonarSharp, Codacy ScalaMeta Pro). If cloud-only tools exist and have issues, fetch them:
 ```bash
 codacy issues <provider> <org> <repo> --output json > /tmp/codacy-remote-cloud-results.json
 ```
@@ -609,7 +609,7 @@ rm -f /tmp/codacy-remote-config.json /tmp/codacy-previous-config.json
 rm -f /tmp/codacy-remote-results.json /tmp/codacy-previous-results.json
 rm -f /tmp/codacy-remote-cloud-results.json
 rm -f /tmp/codacy-baseline.json /tmp/codacy-tuned.json
-rm -f /tmp/codacy-discover.json /tmp/codacy-initial.json
+rm -f /tmp/codacy-discover.json
 ```
 
 ## Per-tool tuning tips

@@ -108,6 +108,14 @@ codacy-analysis init --remote <provider> <org> <repo>
 codacy-analysis init --default
 ```
 
+**Broad auto-tuned initialization (maximum pattern coverage):**
+```bash
+# Initializes with all patterns matching the given severity/category filter
+codacy-analysis init --auto "AllCritical,High,Warning,Minor,AllSecurity,ErrorProne,Performance,BestPractice,UnusedCode,Compatibility,Complexity,Comprehensibility,CodeStyle,Documentation"
+```
+
+The `--auto` flag selects patterns broadly based on a comma-separated filter of severities and categories. Use this when you want to start with maximum coverage and then trim noise using analysis data.
+
 **Repository is not in Codacy (local-only analysis):**
 ```bash
 # Detects languages and tools based on local files and config
@@ -132,6 +140,26 @@ codacy-analysis update-config
 This re-fetches the configuration from the same Codacy repository used during init.
 
 **Only use `update-config` with `--remote` configs.** For configs initialized with `--default` or bare `init`, `update-config` re-runs the original init mode, which would overwrite any manual changes you've made to the config file.
+
+#### Discovering the repository stack
+
+Use `discover` to auto-detect the repository's languages, frameworks, and libraries before initialization:
+
+```bash
+codacy-analysis discover --output-format json --output /tmp/codacy-discover.json
+```
+
+The output lists detected languages, frameworks, and the tools that apply. Use this to inform which tools and patterns to enable.
+
+#### Listing supported tools
+
+Use `info` to see which tools are available in the local Analysis CLI:
+
+```bash
+codacy-analysis info
+```
+
+This lists all tools the CLI can run locally. Compare against tools enabled in Codacy Cloud to identify cloud-only tools that the local CLI cannot run.
 
 ### Step 2: Inspect tool availability (dry-run)
 
