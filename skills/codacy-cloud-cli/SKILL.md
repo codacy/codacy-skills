@@ -4,10 +4,12 @@ description: Uses the Codacy Cloud CLI to query repositories, issues, security f
 license: MIT
 metadata:
   author: Codacy
-  version: 1.4.0
+  version: 1.5.0
 ---
 
 # Codacy Cloud CLI
+
+> **Glossary:** See [glossary.md](../../references/glossary.md) for shared definitions of Codacy concepts (issues, findings, severity, coverage, tools, patterns, etc.).
 
 The Codacy Cloud CLI (`codacy`) is the command-line interface for Codacy Cloud. Use it whenever the user wants to interact with remote Codacy data. This is a different tool from the Codacy Analysis CLI (`codacy-analysis`), which runs static analysis locally.
 
@@ -46,11 +48,25 @@ Use `--output json` on any command for machine-readable output.
 
 ## Provider values
 
-| Value | Provider |
-|-------|----------|
-| `gh`  | GitHub   |
-| `gl`  | GitLab   |
-| `bb`  | Bitbucket |
+See the [Provider section in the glossary](../../references/glossary.md#provider) for the full table of CLI values (`gh`, `gl`, `bb`).
+
+## Auto-detection of repository parameters
+
+The CLI auto-detects the `provider`, `organization`, and `repository` from the git remote origin URL when run inside a repository. This means most commands work without specifying these parameters explicitly:
+
+```bash
+# Auto-detected (run inside the repo)
+codacy issues
+codacy repository
+codacy pull-request 42
+
+# Equivalent explicit form
+codacy issues gh my-org my-repo
+codacy repository gh my-org my-repo
+codacy pull-request gh my-org my-repo 42
+```
+
+Auto-detection supports GitHub, GitLab, and Bitbucket remote URLs. If the remote cannot be parsed (e.g., non-standard hosting), pass the parameters explicitly. All examples in this document use the explicit form for clarity, but the short form is preferred when running inside a repo.
 
 ## How Codacy data works
 
@@ -60,11 +76,20 @@ Use `--output json` on any command for machine-readable output.
 
 ### Reanalysis
 
-Use `--reanalyze` on the `repository` or `pull-request` commands to trigger reanalysis of the HEAD commit. Reanalysis may take a few minutes to start (depends on the queue and the organization's plan) and a few minutes to complete.
+Use `--reanalyze-and-wait` (`-w`) on the `repository` or `pull-request` commands to trigger reanalysis and block until it completes. The CLI captures a baseline, triggers reanalysis, polls every 10 seconds (up to 20 minutes), and reports issue deltas by pattern, severity, and category with timing information. Supports `--output json` for machine-readable delta reports.
 
-There is no dedicated status command. To check progress, re-run the same command without `--reanalyze`:
+```bash
+# Trigger reanalysis and wait for results (preferred)
+codacy repository gh my-org my-repo --reanalyze-and-wait
+codacy repository gh my-org my-repo -w -o json    # JSON delta report
+
+# Fire-and-forget reanalysis (no waiting)
+codacy repository gh my-org my-repo --reanalyze
+```
+
+When using `--reanalyze` without `--and-wait`, check progress manually by re-running the command without `--reanalyze`:
 - **Table output:** look at the "Analysis" field — `"Reanalysis in progress..."` means it is still running; `"Finished X ago"` means it is done
-- **JSON output:** compare the `startedAnalysis` and `endedAnalysis` timestamps on the commit data. The reanalysis is complete when `startedAnalysis` is after the time you triggered the reanalysis AND `endedAnalysis` > `startedAnalysis`
+- **JSON output:** compare the `startedAnalysis` and `endedAnalysis` timestamps — complete when `startedAnalysis` > trigger time AND `endedAnalysis` > `startedAnalysis`
 
 ## Command reference
 
@@ -84,7 +109,10 @@ codacy repository gh my-org my-repo --add       # add to Codacy
 codacy repository gh my-org my-repo --remove    # remove from Codacy
 codacy repository gh my-org my-repo --follow    # follow repository
 codacy repository gh my-org my-repo --unfollow  # unfollow repository
-codacy repository gh my-org my-repo --reanalyze  # trigger reanalysis of HEAD commit
+codacy repository gh my-org my-repo --reanalyze            # trigger reanalysis (fire-and-forget)
+codacy repository gh my-org my-repo --reanalyze-and-wait   # trigger and wait for completion with delta report
+codacy repository gh my-org my-repo --link-standard <id>   # link a coding standard
+codacy repository gh my-org my-repo --unlink-standard <id> # unlink a coding standard
 ```
 
 ### Issues (code quality)
@@ -94,8 +122,19 @@ codacy repository gh my-org my-repo --reanalyze  # trigger reanalysis of HEAD co
 codacy issues gh my-org my-repo
 codacy issues gh my-org my-repo --branch main --severities Critical,High
 codacy issues gh my-org my-repo --categories Security
-codacy issues gh my-org my-repo --overview      # totals grouped by category/severity/language
+codacy issues gh my-org my-repo --tools eslint,semgrep        # filter by detecting tool
+codacy issues gh my-org my-repo --limit 500                    # fetch up to N results (default 100, max 1000)
 
+# Overview: totals grouped by category/severity/language
+codacy issues gh my-org my-repo --overview                     # short flag: -O
+codacy issues gh my-org my-repo -O -o json                     # JSON — includes per-pattern issue counts and false positive counts
+```
+
+The `--overview` output includes:
+- **False positive counts** per pattern — labeled as "Not a False Positive" / "Potential False Positive"
+- **Suggested actions to reduce noise** — identifies patterns accounting for 10%+ of all issues or 3x the average per-pattern count, and generates ready-to-run `codacy pattern` disable commands for each. If a pattern is enforced by a coding standard or uses a config file, the suggestion adapts accordingly (e.g., suggests editing the coding standard or the config file instead)
+
+```bash
 # Full details for a single issue
 codacy issue gh my-org my-repo <issueId>
 
@@ -103,9 +142,12 @@ codacy issue gh my-org my-repo <issueId>
 codacy issue gh my-org my-repo <issueId> --ignore
 codacy issue gh my-org my-repo <issueId> --ignore --ignore-reason FalsePositive --ignore-comment "Not applicable here"
 codacy issue gh my-org my-repo <issueId> --unignore
+
+# Bulk-ignore all issues matching filters
+codacy issues gh my-org my-repo --severities Minor --categories CodeStyle --ignore
 ```
 
-Filters: `--branch`, `--patterns`, `--severities` (Critical,High,Medium,Minor), `--categories`, `--languages`, `--tags`, `--authors`
+Filters: `--branch`, `--patterns`, `--severities` (Critical,High,Medium,Minor), `--categories`, `--languages`, `--tools`, `--tags`, `--authors`
 
 Ignore reasons: `AcceptedUse` (default) | `FalsePositive` | `NotExploitable` | `TestCode` | `ExternalCode`
 
@@ -117,6 +159,7 @@ codacy findings gh my-org my-repo
 codacy findings gh my-org                       # org-wide
 codacy findings gh my-org my-repo --severities Critical,High
 codacy findings gh my-org my-repo --statuses Overdue,DueSoon
+codacy findings gh my-org my-repo --limit 500   # fetch up to N results (default 100, max 1000)
 
 # Full details for a single finding (includes CVE data)
 codacy finding gh my-org my-repo <findingId>
@@ -153,6 +196,7 @@ codacy pull-request gh my-org my-repo <prNumber> --ignore-all-false-positives
 
 # Trigger reanalysis of PR HEAD commit
 codacy pull-request gh my-org my-repo <prNumber> --reanalyze
+codacy pull-request gh my-org my-repo <prNumber> --reanalyze-and-wait   # trigger and wait for completion
 ```
 
 ### Tools & patterns
@@ -171,6 +215,9 @@ codacy patterns gh my-org my-repo eslint
 codacy patterns gh my-org my-repo eslint --enabled --categories Security
 codacy patterns gh my-org my-repo pylint --search W0123
 
+# Full details for a specific pattern (description, parameters, severity, category)
+codacy pattern gh my-org my-repo eslint no-unused-vars
+
 # Enable, disable, or configure a pattern
 codacy pattern gh my-org my-repo eslint no-unused-vars --enable
 codacy pattern gh my-org my-repo eslint no-unused-vars --disable
@@ -180,6 +227,10 @@ codacy pattern gh my-org my-repo eslint max-len --parameter max=120
 codacy patterns gh my-org my-repo eslint --categories Security --severities Critical,High --enable-all
 codacy patterns gh my-org my-repo pylint --categories CodeStyle --severities Minor --disable-all
 ```
+
+**Configuration file and coding standard awareness:**
+- When a tool uses a local configuration file (`--configuration-file true`), `codacy patterns` skips fetching managed patterns (they don't apply)
+- When a pattern is enforced by a coding standard, `--enable`/`--disable` will refuse the operation with a message indicating which standard enforces it. Update the coding standard at the organization level instead, or unlink the standard from the repository first (`codacy repository ... --unlink-standard <id>`)
 
 Pattern search tip: Codacy pattern IDs combine tool prefix and original ID. Use `--search` with the original ID to find them:
 ```bash
@@ -198,6 +249,11 @@ codacy tools gh my-org my-repo --import --force -y               # unlink coding
 ```
 
 The `--import` flag reads a local `.codacy/codacy.config.json` (or a specified path) and applies the tool and pattern configuration to the Codacy Cloud repository. Use `-y` (`--skip-approval`) to skip the interactive confirmation. Use `--force` to unlink the repository from its Coding Standard before importing — this is required when org-level standards block pattern changes.
+
+**Import behavior:**
+- Preserves cloud-only tools during import — only tools supported locally are modified; cloud-only tools (e.g., SonarSharp, Codacy ScalaMeta Pro) keep their existing enabled/disabled state
+- Handles config-file mode correctly — when a tool uses a local configuration file, the import skips resetting its managed patterns (they don't apply)
+- Surfaces structured API error details on import failures, including which tools/patterns conflicted and why
 
 **Note:** The `.codacy/codacy.config.json` file is for local analysis only. Committing it to the repository does NOT affect Codacy Cloud. The `--import` command is the only way to sync local config to Cloud.
 
@@ -219,14 +275,13 @@ codacy pull-request gh my-org my-repo 42 --diff
 codacy issue gh my-org my-repo <issueId>   # includes pattern docs and code context
 ```
 
-**Trigger reanalysis and check status:**
+**Trigger reanalysis and wait for results:**
 ```bash
-# Trigger reanalysis
-codacy repository gh my-org my-repo --reanalyze
+codacy repository gh my-org my-repo --reanalyze-and-wait
+codacy repository gh my-org my-repo -w -o json    # JSON delta report with issue changes by pattern/severity/category
+```
 
-# Check status (table — look at Analysis field)
-codacy repository gh my-org my-repo
-
-# Check status (JSON — compare startedAnalysis vs endedAnalysis)
-codacy repository gh my-org my-repo --output json
+**Identify and reduce noise:**
+```bash
+codacy issues gh my-org my-repo --overview        # see false positive counts and suggested actions to reduce noise
 ```

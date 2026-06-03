@@ -9,6 +9,8 @@ metadata:
 
 # Setup Coverage
 
+> **Glossary:** See [glossary.md](../../references/glossary.md) for shared definitions of Codacy concepts (issues, findings, severity, coverage, tools, patterns, etc.).
+
 This skill sets up test coverage reporting in a repository and configures automatic upload to Codacy. It detects what exists, identifies what is missing, and fills the gaps.
 
 ## Prerequisites
