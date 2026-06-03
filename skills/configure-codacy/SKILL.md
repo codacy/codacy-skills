@@ -4,10 +4,12 @@ description: Tailors Codacy configuration to a project by discovering its stack,
 license: MIT
 metadata:
   author: Codacy
-  version: 4.0.0
+  version: 4.3.0
 ---
 
 # Configure Codacy
+
+> **Glossary:** See [glossary.md](../../references/glossary.md) for shared definitions of Codacy concepts (issues, findings, severity, coverage, tools, patterns, etc.).
 
 This skill tailors Codacy configuration to a project's actual stack and coding conventions. It discovers the repository's languages and frameworks, initializes a broad set of tools and patterns, runs analysis, then intelligently cuts noise — producing a clean, high-signal configuration with a full audit trail of what changed and why.
 
@@ -36,11 +38,17 @@ Read [the config format reference](../codacy-analysis-cli/references/config-form
 The skill supports three modes that control whether configuration is imported to Codacy Cloud after tuning:
 
 - **Interactive (default):** After tuning and presenting results, prompt the user via `AskUserQuestion` whether to import the configuration to Codacy Cloud. This is the default when no arguments are provided.
-- **Auto-import:** If the user's invocation arguments contain the word "import" (e.g., `/configure-codacy import configuration`, `/configure-codacy --import`), skip the prompt and import automatically after presenting results. Useful for CI runs and automation.
+- **Auto-import:** If the user's invocation arguments contain the word "import" (e.g., `/configure-codacy import configuration`, `/configure-codacy --import`), skip the import prompt and import automatically after presenting results. Useful for CI runs and automation.
 - **Local-only:** If the repo is not on Codacy Cloud (determined in Step 0), never ask about importing. Present results and note that the config is ready for local analysis only.
 
-Parse the invocation arguments at the very start. Set an internal mode that Step 6 will reference:
+Additionally, the **force** flag controls Coding Standard handling during import:
+
+- **Force disabled (default):** If the import encounters Coding Standard conflicts (409 errors), **do NOT automatically retry with `--force`**. Instead, present the conflicts to the user via `AskUserQuestion` and let them decide whether to unlink the Coding Standards.
+- **Force enabled:** If the user's invocation arguments contain the word "force" (e.g., `/configure-codacy import force`), automatically retry with `--force` when Coding Standard conflicts occur.
+
+Parse the invocation arguments at the very start. Set internal flags that Step 6 will reference:
 - If args contain "import" → auto-import mode
+- If args contain "force" → force mode (allows automatic Coding Standard unlinking)
 - Else → interactive mode (may become local-only if Step 0 finds the repo is not on Cloud)
 
 ## Tailored configuration workflow
@@ -61,27 +69,29 @@ Configuration Progress:
 
 This step determines the starting point and captures the BEFORE metrics for the final summary. The flow depends on two conditions: whether the repo is on Codacy Cloud, and whether a local config already exists.
 
-#### 0a. Check Codacy Cloud status
+#### 0a. Create temp directory and check Codacy Cloud status
 
-Derive the provider, organization, and repository name from the git remote URL:
-- `github.com` → provider `gh`
-- `gitlab.com` → provider `gl`
-- `bitbucket.org` → provider `bb`
+Create the temporary directory for intermediate analysis files:
+```bash
+mkdir -p .codacy/tmp
+```
+
+The Cloud CLI auto-detects provider, organization, and repository from the git remote origin URL — no need to derive these manually. All `codacy` commands below can be run without explicit `<provider> <org> <repo>` when inside the repo. For clarity, the examples use the explicit form; replace with auto-detected short form in practice.
 
 **CLI output caveat:** Both `codacy` and `codacy-analysis` CLIs write progress lines (e.g., `- Fetching tools...`, `- Fetching issues...`) to stderr before the actual JSON output. When piping CLI output directly to `jq`, redirect stderr to avoid parse errors:
 
 ```bash
-codacy repository <provider> <org> <repo> --output json 2>/dev/null | jq '...'
+codacy repository --output json 2>/dev/null | jq '...'
 ```
 
 Check Cloud status:
 ```bash
-codacy repository <provider> <org> <repo> --output json
+codacy repository --output json
 ```
 
 If this succeeds, the repo is on Codacy Cloud. Also list enabled tools to identify cloud-only tools later:
 ```bash
-codacy tools <provider> <org> <repo> --output json 2>/dev/null | jq '[.[] | select(.settings.isEnabled == true) | {name, isClientSide}]'
+codacy tools --output json 2>/dev/null | jq '[.[] | select(.settings.isEnabled == true) | {name, isClientSide}]'
 ```
 
 If it fails (repo not on Codacy, no auth, or no Cloud CLI), note that cloud features will be skipped — the local workflow is fully self-contained. Set the invocation mode to local-only (see "Invocation modes" section).
@@ -104,41 +114,47 @@ rm -f .codacy/codacy.config.json
 codacy-analysis init --remote <provider> <org> <repo>
 
 # Store a copy for later merging and comparison
-cp .codacy/codacy.config.json /tmp/codacy-remote-config.json
+cp .codacy/codacy.config.json .codacy/tmp/codacy-remote-config.json
 
 # Record BEFORE metrics
 jq '[.tools[].patterns | length] | add' .codacy/codacy.config.json
 jq '.tools | length' .codacy/codacy.config.json
 
 # Run analysis with the Cloud config to capture the BEFORE issue landscape
-codacy-analysis analyze --install-dependencies --output-format json --output /tmp/codacy-remote-results.json
+codacy-analysis analyze --install-dependencies --output-format json --output .codacy/tmp/codacy-remote-results.json
 
 # Record BEFORE issue count and runtime
-jq '.issues | length' /tmp/codacy-remote-results.json
-jq '.metadata.durationMs' /tmp/codacy-remote-results.json
+jq '.issues | length' .codacy/tmp/codacy-remote-results.json
+jq '.metadata.durationMs' .codacy/tmp/codacy-remote-results.json
 ```
+
+Fetch the Cloud issue overview — this gives per-pattern issue counts, false positive counts, and suggested actions across the entire repository without downloading every individual issue:
+```bash
+codacy issues -O -o json > .codacy/tmp/codacy-cloud-overview.json
+```
+This overview data is valuable for tuning decisions in Step 4: it shows which patterns produce the most issues on Cloud (the production truth), includes false positive rates per pattern, and generates suggested actions to reduce noise (identifying patterns accounting for 10%+ of all issues or 3x the average). The suggested actions include ready-to-run disable commands, adapted for coding standard or config-file constraints. Save it for later comparison.
 
 Also check for cloud-only tools — tools enabled in Cloud but not available in the local Analysis CLI. Get the local CLI's supported tools via `codacy-analysis info`, then compare against the Cloud-enabled tools list above. Any Cloud-enabled tool not in the `info` output is cloud-only (e.g., SonarSharp, Codacy ScalaMeta Pro). If cloud-only tools exist and have issues, fetch them:
 ```bash
-codacy issues <provider> <org> <repo> --output json > /tmp/codacy-remote-cloud-results.json
+codacy issues --output json > .codacy/tmp/codacy-remote-cloud-results.json
 ```
 
 **Track B — NOT on Cloud, but local `.codacy/codacy.config.json` exists:**
 
 ```bash
 # Store a copy for later merging and comparison
-cp .codacy/codacy.config.json /tmp/codacy-previous-config.json
+cp .codacy/codacy.config.json .codacy/tmp/codacy-previous-config.json
 
 # Record BEFORE metrics
 jq '[.tools[].patterns | length] | add' .codacy/codacy.config.json
 jq '.tools | length' .codacy/codacy.config.json
 
 # Run analysis with the existing local config
-codacy-analysis analyze --install-dependencies --output-format json --output /tmp/codacy-previous-results.json
+codacy-analysis analyze --install-dependencies --output-format json --output .codacy/tmp/codacy-previous-results.json
 
 # Record BEFORE issue count and runtime
-jq '.issues | length' /tmp/codacy-previous-results.json
-jq '.metadata.durationMs' /tmp/codacy-previous-results.json
+jq '.issues | length' .codacy/tmp/codacy-previous-results.json
+jq '.metadata.durationMs' .codacy/tmp/codacy-previous-results.json
 ```
 
 **Track C — No Cloud, no local config:**
@@ -147,12 +163,47 @@ Record BEFORE as unconfigured: 0 patterns, 0 tools, 0 issues, `null` runtime. No
 
 Save the BEFORE metrics from whichever track ran. The broad config metrics from Steps 2-3 are internal only — they are NOT reported to the user.
 
+#### 0c. Cloud noise pre-evaluation (Track A only)
+
+If the Cloud overview was fetched (`.codacy/tmp/codacy-cloud-overview.json` exists), analyze it now to identify patterns that are already known to be noisy based on Cloud production data. This saves time by pre-disabling known noise before running local analysis.
+
+Start by checking the overview's **suggested actions** — the CLI already identifies patterns accounting for 10%+ of all issues or 3x the average per-pattern count and provides ready-to-run disable commands. Use these suggestions as the primary signal, then supplement with the criteria below.
+
+Parse the overview's `patterns` array (each entry has `{id, title, total}`) and false positive counts:
+
+```bash
+# Issue counts per pattern
+jq '[.overview.patterns[] | {id, title, total}] | sort_by(-.total)' .codacy/tmp/codacy-cloud-overview.json
+
+# Patterns with potential false positives (count > 0)
+jq '[.overview.patterns[] | select(.potentialFalsePositives > 0) | {id, title, total, potentialFalsePositives, falsePositiveRatio: ((.potentialFalsePositives / .total) * 100 | round)}] | sort_by(-.falsePositiveRatio)' .codacy/tmp/codacy-cloud-overview.json
+```
+
+**Identify noisy patterns using these criteria:**
+
+1. **Wrong-language patterns** — cross-reference pattern IDs against the discovered stack (Step 1 runs next, but the Cloud tools list from Step 0a gives a rough language picture). Pattern IDs often contain the target language (e.g., `python.`, `java.`, `ruby.`). Mark patterns for languages clearly not in the project.
+
+2. **Convention/style noise** — patterns with very high issue counts (top 5% by count) in categories like CodeStyle, Documentation, or Comprehensibility are likely convention mismatches. Mark these as candidates.
+
+3. **High false-positive ratio patterns** — patterns where a significant proportion of issues are flagged as potential false positives (e.g., `potentialFalsePositives / total > 30%`) are strong candidates for pre-disabling. These patterns are producing results that Codacy's own heuristics consider unreliable. Store the false positive data for use in Step 4b rule 7, where patterns with high false-positive ratios get additional scrutiny during local verification.
+
+4. **Never pre-disable Security patterns** — security patterns are never marked for pre-disabling regardless of count or false-positive ratio. They are handled in Step 4 with full context.
+
+5. **Never pre-disable Critical/High severity patterns** — these require local verification before any action.
+
+**Classify each noisy pattern into two lists:**
+
+- **`cloudNoiseLocal`** — noisy patterns from tools supported by the local Analysis CLI. These will be removed from `.codacy/codacy.config.json` immediately after `init --auto` in Step 2.
+- **`cloudNoiseCloudOnly`** — noisy patterns from cloud-only tools (identified in Step 0b). These will be disabled via Cloud CLI during Step 6 (import), only if the import is performed.
+
+Store both lists for use in Steps 2 and 6. This is a pre-filter — Step 4 will perform deeper noise evaluation on the local analysis results.
+
 ### Step 1: Discover repository stack
 
 Run discovery to understand the repository's languages, frameworks, and libraries:
 
 ```bash
-codacy-analysis discover --output-format json --output /tmp/codacy-discover.json
+codacy-analysis discover --output-format json --output .codacy/tmp/codacy-discover.json
 ```
 
 Parse the output to understand:
@@ -173,19 +224,21 @@ rm -f .codacy/codacy.config.json
 Initialize with the broadest useful pattern set, filtered by the discovered stack:
 
 ```bash
-codacy-analysis init --auto "AllCritical,High,Warning,Minor,AllSecurity,ErrorProne,Performance,BestPractice,UnusedCode,Compatibility,Complexity,Comprehensibility,CodeStyle,Documentation"
+codacy-analysis init --auto "Critical,High,Warning,Minor,AllSecurity,ErrorProne,Performance,BestPractice,UnusedCode,Compatibility,Complexity,Comprehensibility,CodeStyle,Documentation"
 ```
 
 This filter means:
-- `AllCritical` — ALL Critical-severity patterns (including non-defaults)
+- `Critical` — Codacy-recommended (default) Critical-severity patterns
 - `AllSecurity` — ALL Security-category patterns (including non-defaults)
 - Everything else — Codacy-recommended (default) patterns at High, Warning, and Minor severity across all categories
 
 The intent is to start broad and cut in Step 4 based on actual analysis data.
 
+**Apply Cloud noise pre-filter (Track A only):** If `cloudNoiseLocal` patterns were identified in Step 0c, remove them from the newly created config now. For each pattern in `cloudNoiseLocal`, find it in `.codacy/codacy.config.json` under its tool's `patterns` array and remove it. This avoids wasting local analysis time on patterns already known to be noisy from Cloud production data. Track these removals for the summary (they are pre-filter changes, reported in `patternChanges` with reason referencing Cloud data).
+
 **Merge preserved configuration** from the baseline stored in Step 0:
-- **Track A** (Cloud): Merge from `/tmp/codacy-remote-config.json`
-- **Track B** (local config): Merge from `/tmp/codacy-previous-config.json`
+- **Track A** (Cloud): Merge from `.codacy/tmp/codacy-remote-config.json`
+- **Track B** (local config): Merge from `.codacy/tmp/codacy-previous-config.json`
 - **Track C** (no prior config): No merge needed
 
 For the applicable track:
@@ -208,7 +261,7 @@ jq '.tools | length' .codacy/codacy.config.json
 Run analysis with the broad config to see the full issue landscape. This is an internal step for tuning decisions — the BEFORE reference for the user-facing summary comes from Step 0.
 
 ```bash
-codacy-analysis analyze --install-dependencies --output-format json --output /tmp/codacy-baseline.json
+codacy-analysis analyze --install-dependencies --output-format json --output .codacy/tmp/codacy-baseline.json
 ```
 
 Always use `--output <file>` to avoid broken JSON from stdout buffering.
@@ -216,34 +269,36 @@ Always use `--output <file>` to avoid broken JSON from stdout buffering.
 **Record broad-config metrics** (used for tuning decisions in Step 4, not for the summary):
 ```bash
 # Total issues in broad config
-jq '.issues | length' /tmp/codacy-baseline.json
+jq '.issues | length' .codacy/tmp/codacy-baseline.json
 
 # Total runtime in milliseconds
-jq '.metadata.durationMs' /tmp/codacy-baseline.json
+jq '.metadata.durationMs' .codacy/tmp/codacy-baseline.json
 ```
 
 **Parse the issue distribution** — this is the basis for all tuning decisions:
 
 ```bash
 # Issues grouped by pattern (noise detection)
-jq '[.issues | group_by(.patternId) | .[] | {patternId: .[0].patternId, toolId: .[0].toolId, severity: .[0].severity, category: .[0].category, count: length}] | sort_by(-.count)' /tmp/codacy-baseline.json
+jq '[.issues | group_by(.patternId) | .[] | {patternId: .[0].patternId, toolId: .[0].toolId, severity: .[0].severity, category: .[0].category, count: length}] | sort_by(-.count)' .codacy/tmp/codacy-baseline.json
 
 # Issues by severity
-jq '.issues | group_by(.severity) | map({severity: .[0].severity, count: length})' /tmp/codacy-baseline.json
+jq '.issues | group_by(.severity) | map({severity: .[0].severity, count: length})' .codacy/tmp/codacy-baseline.json
 
 # Issues by category
-jq '.issues | group_by(.category) | map({category: .[0].category, count: length})' /tmp/codacy-baseline.json
+jq '.issues | group_by(.category) | map({category: .[0].category, count: length})' .codacy/tmp/codacy-baseline.json
 
 # Top 20 files by issue count
-jq '[.issues | group_by(.filePath) | .[] | {filePath: .[0].filePath, count: length}] | sort_by(-.count) | .[0:20]' /tmp/codacy-baseline.json
+jq '[.issues | group_by(.filePath) | .[] | {filePath: .[0].filePath, count: length}] | sort_by(-.count) | .[0:20]' .codacy/tmp/codacy-baseline.json
 
 # Per-tool results
-jq '.toolResults | map({toolId, status, issueCount, durationMs, filesAnalyzed})' /tmp/codacy-baseline.json
+jq '.toolResults | map({toolId, status, issueCount, durationMs, filesAnalyzed})' .codacy/tmp/codacy-baseline.json
 ```
 
 ### Step 4: Smart noise evaluation and tuning
 
 This is the core of the skill. Work through the baseline results using a structured, context-aware decision framework.
+
+**Cloud overview as a cross-reference (Track A only):** If `.codacy/tmp/codacy-cloud-overview.json` exists (fetched in Step 0b), use its per-pattern issue counts and false positive data as a cross-reference against the local baseline. The cloud overview reflects the full repository analysis on Codacy (production truth), while the local baseline only covers files the local CLI can analyze. When a pattern shows high counts in the cloud overview but low counts locally, it may indicate cloud-only tool coverage — factor this into deduplication and disable decisions (don't disable a pattern that is still needed on Cloud). The false positive counts from the overview are especially valuable for rule 7 below — patterns with high false-positive ratios on Cloud are likely producing the same unreliable results locally.
 
 #### 4a. Establish the noise floor
 
@@ -287,7 +342,7 @@ For each pattern in the baseline results, sorted by issue count (highest first),
    - Tabs-vs-spaces rules when the entire project uses the "wrong" style consistently
    - Naming convention rules that don't match the project's established naming
 
-7. **False-positive prone → disable.** Some patterns are known to produce high false-positive rates. Review actual instances in the code to confirm. Only disable after verifying the hits are genuinely not useful for this codebase.
+7. **False-positive prone → disable.** Use the Cloud overview's false positive data (from Step 0c) as the primary signal: patterns where `potentialFalsePositives / total > 30%` are strong disable candidates — Codacy's own heuristics are flagging a significant share of their results as unreliable. For these patterns, review a sample of actual instances in the code to confirm. If the local instances confirm the pattern is producing low-value results for this codebase, disable it. For patterns without Cloud false-positive data, check if the pattern is known to produce high false-positive rates in general. Only disable after verifying the hits are genuinely not useful for this codebase.
 
 8. **Parameter tuning over disabling.** Before disabling a valuable pattern, check if it has configurable parameters:
    - Lizard complexity thresholds — raise to match the codebase's actual complexity profile
@@ -328,7 +383,7 @@ For each tool in the config:
 #### 4e. Lost patterns recovery
 
 Compare the baseline analysis results (from Step 0) against the current `.codacy/codacy.config.json` after tuning. For each pattern that:
-- Found issues in the baseline analysis (`/tmp/codacy-remote-results.json` for Track A, `/tmp/codacy-previous-results.json` for Track B)
+- Found issues in the baseline analysis (`.codacy/tmp/codacy-remote-results.json` for Track A, `.codacy/tmp/codacy-previous-results.json` for Track B)
 - Has `category == "Security"` OR `severity == "Error"` OR `severity == "High"`
 - Is NOT present in the current config (was excluded by `init --auto` or removed during tuning)
 
@@ -353,7 +408,7 @@ Edit `.codacy/codacy.config.json` with all decisions from 4a–4e. Track every c
 Run analysis with the tuned config to validate the improvement:
 
 ```bash
-codacy-analysis analyze --install-dependencies --output-format json --output /tmp/codacy-tuned.json
+codacy-analysis analyze --install-dependencies --output-format json --output .codacy/tmp/codacy-tuned.json
 ```
 
 **Record AFTER metrics:**
@@ -365,10 +420,10 @@ jq '[.tools[].patterns | length] | add' .codacy/codacy.config.json
 jq '.tools | length' .codacy/codacy.config.json
 
 # Total issues after tuning
-jq '.issues | length' /tmp/codacy-tuned.json
+jq '.issues | length' .codacy/tmp/codacy-tuned.json
 
 # Runtime after tuning
-jq '.metadata.durationMs' /tmp/codacy-tuned.json
+jq '.metadata.durationMs' .codacy/tmp/codacy-tuned.json
 ```
 
 **Validate:**
@@ -459,7 +514,17 @@ Write `.codacy/configure-codacy-summary.json` with the before/after metrics, a d
     "markdownlint added for Markdown quality",
     "Checkov expanded from 6 to 1358 IaC security patterns"
   ],
-  "importResults": null
+  "localConfigTools": [
+    {
+      "toolId": "ESLint9",
+      "configFile": "eslint.config.js",
+      "issueCount": 42,
+      "note": "Issues from this tool are controlled by the project's ESLint config, not Codacy patterns. Edit eslint.config.js to reduce noise."
+    }
+  ],
+  "codacyYaml": null,
+  "importResults": null,
+  "cloudVerification": null
 }
 ```
 
@@ -498,7 +563,19 @@ Omit `fileExclusions` entirely if no new exclusions were added.
 
 **`keyImprovements`** — array of 3–6 human-readable sentences summarizing the most impactful improvements. Focus on what changed and the quantitative impact. These should be suitable for presenting to the user as a summary.
 
-**`importResults`** — `null` until Step 6 runs. If Cloud import is performed, this is populated with the results (see Step 6e for the schema).
+**`localConfigTools`** — array of tools that have `useLocalConfigurationFile: true`. Each entry includes:
+- `toolId` — the tool identifier
+- `configFile` — path to the project's config file used by this tool
+- `issueCount` — number of issues this tool produced in the tuned analysis
+- `note` — human-readable explanation that noise from this tool is governed by the project's own config, not Codacy patterns
+
+Empty array if no tools use local configuration files.
+
+**`codacyYaml`** — string containing the generated `.codacy.yaml` file content if file exclusions were added (see Step 5c). `null` if no `.codacy.yaml` was generated.
+
+**`importResults`** — `null` until Step 6 runs. If Cloud import is performed, this is populated with the results (see Step 6f for the schema).
+
+**`cloudVerification`** — `null` unless Step 6e runs. Contains post-import Cloud verification results: whether reanalysis completed, issue counts before/after, patterns disabled on Cloud, and warnings. See Step 6e for the schema.
 
 #### 5b. Present local results
 
@@ -511,6 +588,43 @@ Display a clear before/after summary to the user:
 5. **Security deduplication** — any security patterns that were deduplicated (which was kept, which was disabled)
 6. **Key improvements** — the `keyImprovements` array from the summary JSON, presented as a bulleted list
 7. **Warnings** — failed tools, Semgrep parsing errors, tools with 0 files matched, any other issues encountered
+8. **Local config file limitations** — for tools with `useLocalConfigurationFile: true`, note that their issues are controlled by the project's own config file (e.g., `.eslintrc`, `.rubocop.yml`), not by Codacy's managed patterns. Noise from these tools can only be reduced by editing the project's own config. List each such tool and the number of issues it produced, so the user knows where to look if they want further noise reduction.
+
+#### 5c. Generate `.codacy.yaml` for Cloud file exclusions
+
+File exclusions in `.codacy/codacy.config.json` only apply to local analysis. Codacy Cloud does not support importing file exclusions via the API or CLI. To apply file exclusions on Codacy Cloud, they must be defined in a `.codacy.yaml` file committed to the repository root (see [Codacy configuration file](https://docs.codacy.com/repositories-configure/codacy-configuration-file/)).
+
+**If any new file exclusions were added during tuning** (global or per-tool), generate a `.codacy.yaml` file:
+
+1. Read the existing `.codacy.yaml` from the repo root (if it exists) to preserve any existing configuration
+2. Merge the new exclusions with any existing `exclude_paths` and per-engine `exclude_paths`
+3. Write the updated `.codacy.yaml` to the repo root
+
+The `.codacy.yaml` format uses Java glob syntax:
+```yaml
+---
+exclude_paths:
+  - "src/routeTree.gen.ts"
+  - "vendor/**"
+engines:
+  markdownlint:
+    exclude_paths:
+      - "CHANGELOG.md"
+  stylelint:
+    exclude_paths:
+      - "assets/vendor/**"
+```
+
+**Engine name mapping:** The engine names in `.codacy.yaml` may differ from the tool IDs in `.codacy/codacy.config.json`. Use the tool ID in lowercase as the engine name (e.g., `ESLint9` → `eslint9`, `Semgrep` → `semgrep`, `markdownlint` → `markdownlint`). If unsure, the tool ID in lowercase is the safe default.
+
+4. Store the full content of the generated `.codacy.yaml` as a string in the `codacyYaml` field of the summary JSON
+5. Present to the user:
+   - Note that file exclusions cannot be imported to Codacy Cloud via API
+   - The `.codacy.yaml` file has been created/updated in the repo root
+   - The user should commit and push this file to apply the exclusions on Codacy Cloud
+   - Codacy Cloud always reads `.codacy.yaml` from the default branch
+
+If no new file exclusions were added, skip this step and leave `codacyYaml` as `null`.
 
 ### Step 6: Cloud import (conditional)
 
@@ -528,30 +642,95 @@ Based on invocation mode (see "Invocation modes" section):
 
 #### 6c. Cloud-only tools noise evaluation
 
-Only if cloud-only tools had issues fetched in Step 0 (`/tmp/codacy-remote-cloud-results.json` exists):
+Only if cloud-only tools had issues fetched in Step 0 (`.codacy/tmp/codacy-remote-cloud-results.json` exists):
 
 Apply the same noise evaluation framework from Step 4 to the cloud-fetched issues. For each noisy pattern from a cloud-only tool:
-- Check if its parameters can be tweaked to return fewer results → `codacy pattern <provider> <org> <repo> <toolName> <patternId> --parameter key=value`
-- If not tweakable → try to disable it: `codacy pattern <provider> <org> <repo> <toolName> <patternId> --disable`
+- Check if its parameters can be tweaked to return fewer results → `codacy pattern <toolName> <patternId> --parameter key=value`
+- If not tweakable → try to disable it: `codacy pattern <toolName> <patternId> --disable`
 - If disable fails (Coding Standard enforcement) → note it for the results
 
 #### 6d. Import local config
 
 ```bash
-codacy tools <provider> <org> <repo> --import .codacy/codacy.config.json -y
+codacy tools --import .codacy/codacy.config.json -y
 ```
 
-If the import fails with a Coding Standard error (patterns enforced at org level cannot be overridden), retry with `--force` to unlink the coding standard first:
-```bash
-codacy tools <provider> <org> <repo> --import .codacy/codacy.config.json --force -y
-```
-Inform the user that `--force` unlinks the repository from its Coding Standard, and the import overrides the tool/pattern configuration.
+If the import encounters Coding Standard conflicts (409 errors — patterns/tools enforced at org level cannot be overridden):
 
-Do NOT trigger reanalysis or poll for completion.
+1. **If force mode is enabled** (user invoked with "force" argument): Automatically retry with `--force`:
+   ```bash
+   codacy tools --import .codacy/codacy.config.json --force -y
+   ```
+   Note in the results that `--force` was used and which Coding Standards were unlinked.
+
+2. **If force mode is NOT enabled** (default): Do **NOT** automatically retry with `--force`. Instead:
+   - Report which tools/patterns could not be changed due to Coding Standard enforcement
+   - List the specific Coding Standards that are blocking the changes
+   - Use `AskUserQuestion` to ask the user: "The import was partially blocked by Coding Standards [list names]. Would you like to unlink these Coding Standards and retry with --force? This will sever the link between this repository and the organization-level standards."
+   - If the user accepts → retry with `--force`
+   - If the user declines → keep the partial import as-is and note the blocked changes in the results
+
+**NEVER unlink Coding Standards without explicit user consent or the "force" invocation flag.**
 
 **Important:** The `.codacy/codacy.config.json` file is for local use only. Committing or pushing it to the repository has NO effect on Codacy Cloud. The import command is the only way to sync local config to Cloud.
 
-#### 6e. Show Cloud import results
+#### 6e. Post-import Cloud verification
+
+After a successful import (or partial import), trigger reanalysis and wait for Cloud results to verify the configuration works as expected in the Cloud environment. Cloud analysis may differ from local analysis (different tool versions, containerized execution, file visibility).
+
+**1. Trigger reanalysis and wait for completion:**
+
+Use `--reanalyze-and-wait` to trigger reanalysis, poll automatically (every 10 seconds, up to 20 minutes), and get a delta report of issue changes by pattern, severity, and category:
+
+```bash
+codacy repository --reanalyze-and-wait -o json > .codacy/tmp/codacy-reanalysis-delta.json
+```
+
+This replaces manual polling. The CLI captures a baseline before reanalysis, waits for completion, and reports the full delta. If it times out after 20 minutes, it reports what it knows and exits — note the timeout in warnings and proceed without full Cloud verification.
+
+**2. Fetch fresh Cloud overview and evaluate:**
+
+Once reanalysis is complete (check the delta report), get the updated issue overview:
+```bash
+codacy issues -O -o json > .codacy/tmp/codacy-post-import-overview.json
+```
+
+Compare the post-import overview against the pre-import overview (`.codacy/tmp/codacy-cloud-overview.json`). For each pattern in the new overview, sorted by issue count (highest first):
+
+- If a pattern has a **high issue count** and is **not** in the Security category and **not** Critical/High severity → it is a candidate for Cloud-side disabling
+- Apply the same noise framework from Step 4b (wrong-language, convention mismatch, deduplication) using Cloud data
+- For patterns that should be disabled, use the Cloud CLI:
+  ```bash
+  codacy pattern <toolId> <patternId> --disable
+  ```
+- If a disable fails due to Coding Standard enforcement, note it in warnings
+- Also disable any patterns in the `cloudNoiseCloudOnly` list from Step 0c that were deferred for this moment
+
+**4. Record Cloud verification results:**
+
+Track all Cloud-side pattern changes in the summary under a new `cloudVerification` field:
+```json
+{
+  "cloudVerification": {
+    "reanalysisCompleted": true,
+    "issuesBefore": 375,
+    "issuesAfter": 280,
+    "patternsDisabled": [
+      {
+        "patternId": "markdownlint_MD033",
+        "toolId": "markdownlint",
+        "reason": "Convention mismatch — 150 inline HTML issues in documentation files",
+        "issueCount": 150
+      }
+    ],
+    "warnings": []
+  }
+}
+```
+
+If reanalysis timed out or Cloud verification was skipped, set `reanalysisCompleted: false` and note the reason in warnings.
+
+#### 6f. Show Cloud import results
 
 Update the `importResults` field in `.codacy/configure-codacy-summary.json` with the import outcome:
 
@@ -602,14 +781,10 @@ Present the import results to the user:
 
 ### Step 7: Clean-up
 
-Remove temporary configuration copies and analysis results:
+Remove the temporary directory and all intermediate files:
 
 ```bash
-rm -f /tmp/codacy-remote-config.json /tmp/codacy-previous-config.json
-rm -f /tmp/codacy-remote-results.json /tmp/codacy-previous-results.json
-rm -f /tmp/codacy-remote-cloud-results.json
-rm -f /tmp/codacy-baseline.json /tmp/codacy-tuned.json
-rm -f /tmp/codacy-discover.json
+rm -rf .codacy/tmp
 ```
 
 ## Per-tool tuning tips

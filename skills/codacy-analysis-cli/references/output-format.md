@@ -81,6 +81,8 @@ Array of issues found during analysis.
 
 ### Severity values
 
+See [glossary.md](../../../references/glossary.md#severity) for full severity definitions. The JSON field values map as follows:
+
 | Value | UI equivalent | Description |
 |-------|---------------|-------------|
 | `"Error"` | Critical | Must fix |
@@ -89,6 +91,8 @@ Array of issues found during analysis.
 | `"Info"` | Minor | Informational |
 
 ### Category values
+
+See [glossary.md](../../../references/glossary.md#issue) for full category definitions.
 
 `"Security"`, `"ErrorProne"`, `"CodeStyle"`, `"Compatibility"`, `"Performance"`, `"UnusedCode"`, `"Complexity"`, `"BestPractice"`, `"Documentation"`
 

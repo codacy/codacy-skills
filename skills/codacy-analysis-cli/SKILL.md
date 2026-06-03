@@ -4,10 +4,12 @@ description: Uses the Codacy Analysis CLI to run local static analysis on reposi
 license: MIT
 metadata:
   author: Codacy
-  version: 1.3.0
+  version: 1.4.0
 ---
 
 # Codacy Analysis CLI
+
+> **Glossary:** See [glossary.md](../../references/glossary.md) for shared definitions of Codacy concepts (issues, findings, severity, coverage, tools, patterns, etc.).
 
 The Codacy Analysis CLI (`codacy-analysis`) runs static analysis locally on a repository. It detects languages, selects tools, and reports issues — without pushing code to Codacy. This is a different tool from the Codacy Cloud CLI (`codacy`), which queries remote Codacy data.
 
@@ -72,13 +74,7 @@ The analyzed repository is **never modified outside of `.codacy/`**. The `.codac
 
 ## Provider values
 
-Used with `init --remote`:
-
-| Value | Provider |
-|-------|----------|
-| `gh` | GitHub |
-| `gl` | GitLab |
-| `bb` | Bitbucket |
+Used with `init --remote`. See the [Provider section in the glossary](../../references/glossary.md#provider) for the full table of CLI values (`gh`, `gl`, `bb`).
 
 ## Analysis workflow
 
@@ -127,7 +123,7 @@ codacy-analysis init
 codacy-analysis init /path/to/repo
 ```
 
-All modes create `.codacy/codacy.config.json` in the repo root. If a `.codacy.yaml` (or `.codacy.yml`) exists, its `exclude_paths` are automatically merged into the config.
+All modes create `.codacy/codacy.config.json` in the repo root (or the file passed to `--config-file`, see [Working with alternative configuration files](#working-with-alternative-configuration-files)). If a `.codacy.yaml` (or `.codacy.yml`) exists, its `exclude_paths` are automatically merged into the config.
 
 #### Updating an existing configuration
 
@@ -140,6 +136,44 @@ codacy-analysis update-config
 This re-fetches the configuration from the same Codacy repository used during init.
 
 **Only use `update-config` with `--remote` configs.** For configs initialized with `--default` or bare `init`, `update-config` re-runs the original init mode, which would overwrite any manual changes you've made to the config file.
+
+#### Working with alternative configuration files
+
+By default every command reads and writes `.codacy/codacy.config.json`. Pass `--config-file <path>` to `init`, `analyze`, and `update-config` to use a different file. This lets you keep several configurations side by side and **test them in parallel** without overwriting the main config:
+
+```bash
+# Create an alternative, broadly-tuned config in a separate file
+codacy-analysis init --auto AllCritical,AllSecurity --config-file .codacy/auto-config.json
+
+# Analyze using that config instead of the default
+codacy-analysis analyze --config-file .codacy/auto-config.json --output-format json
+
+# Regenerate it later using its original init mode (the mode is stored in the file)
+codacy-analysis update-config --config-file .codacy/auto-config.json
+```
+
+`--config-file` is honored by `init` (where to create the config), `analyze` (which config to run with), and `update-config` (which config to regenerate). It defaults to `.codacy/codacy.config.json` everywhere.
+
+#### Combining configuration files (`config` command)
+
+The `config` command performs set operations on two config files, combining their tools and patterns. Use it to reconcile experimental configs with a baseline:
+
+```bash
+# Merge — union of tools/patterns from source into dest
+codacy-analysis config --merge --source .codacy/extra.json
+
+# Intersect — keep only tools/patterns present in BOTH files
+codacy-analysis config --intersect --source a.json --dest b.json
+
+# Diff — keep tools/patterns in dest that are NOT in source (dest − source)
+codacy-analysis config --diff --source baseline.json --dest .codacy/codacy.config.json
+```
+
+- Exactly **one** of `--merge`, `--intersect`, `--diff` is required.
+- `--source <path>` is **read-only** (default `.codacy/codacy.config.json`); `--dest <path>` is **overwritten** with the result (default `.codacy/codacy.config.json`).
+- At least one of `--source` / `--dest` must be provided — they cannot both fall back to the same default file.
+
+**`--dest` is overwritten in place.** Point it at a throwaway file (or back up the original first) if you need to preserve the destination config.
 
 #### Discovering the repository stack
 
@@ -238,6 +272,14 @@ codacy-analysis analyze --tool Ruff --tool Bandit --output-format json
 codacy-analysis analyze --tool ESLint9 --files "src/**/*.ts" --output-format json
 ```
 
+#### Run with an alternative configuration file
+
+By default `analyze` reads `.codacy/codacy.config.json`. Pass `--config-file <path>` to run with a different config — useful for comparing configurations side by side (see [Working with alternative configuration files](#working-with-alternative-configuration-files)):
+
+```bash
+codacy-analysis analyze --config-file .codacy/auto-config.json --output-format json
+```
+
 #### Git-aware scoping
 
 Analyze only the code that changed, instead of the full repository:
@@ -261,7 +303,7 @@ These flags work with `--tool`, `--files`, and all other analyze options. When c
 # Run up to 4 tools in parallel
 codacy-analysis analyze --parallel-tools 4 --output-format json
 
-# Increase timeout for slow tools (default: 300000ms = 5 min)
+# Increase timeout for slow tools (default: 600000ms = 10 min)
 codacy-analysis analyze --tool-timeout 600000 --output-format json
 ```
 
@@ -360,6 +402,21 @@ codacy-analysis update-config
 codacy-analysis analyze --output-format json
 ```
 
+### Test two configurations side by side
+
+```bash
+# Baseline config (default location) plus an experimental, broader config
+codacy-analysis init
+codacy-analysis init --auto AllCritical,AllSecurity --config-file .codacy/experimental.json
+
+# Run each independently and compare the results
+codacy-analysis analyze --output-format json --output baseline-results.json
+codacy-analysis analyze --config-file .codacy/experimental.json --output-format json --output experimental-results.json
+
+# Promote the extra tools/patterns from the experiment into the baseline
+codacy-analysis config --merge --source .codacy/experimental.json --dest .codacy/codacy.config.json
+```
+
 ### Run only security-focused tools
 
 ```bash
@@ -379,7 +436,7 @@ codacy-analysis analyze --tool RuboCop --tool Reek --tool Brakeman --output-form
 | `Tool X not found` / tool in `unavailable` | Tool binary not installed | Run with `--install-dependencies`; if that fails, install the tool manually |
 | Analysis produces no results | No tools enabled or no matching files | Re-run `codacy-analysis init` or check `.codacy/codacy.config.json` has tools configured |
 | Wrong tools detected | Language detection missed files | Use `--tool <id>` to force specific tools |
-| Tool timeout | Analysis takes too long on large codebase | Increase `--tool-timeout <ms>` (default 300000) |
+| Tool timeout | Analysis takes too long on large codebase | Increase `--tool-timeout <ms>` (default 600000) |
 | Config outdated after adding new languages | Init was run before new files existed | Run `codacy-analysis update-config` |
 | `Config already exists` on init | `.codacy/codacy.config.json` already present | Use `update-config` instead, or delete `.codacy/codacy.config.json` first |
 | Remote init fails with auth error | Missing or invalid API token | Run `codacy-analysis login` or set `CODACY_API_TOKEN` |

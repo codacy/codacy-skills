@@ -11,6 +11,7 @@ Compatible with Claude Code, OpenAI Codex, GitHub Copilot, Gemini CLI, and any a
 | [`codacy-cloud-cli`](skills/codacy-cloud-cli/SKILL.md) | Use the Codacy Cloud CLI to query issues, findings, pull requests, tools, and patterns |
 | [`codacy-code-review`](skills/codacy-code-review/SKILL.md) | Enrich code reviews with Codacy data — issues, coverage, security, duplication |
 | [`configure-codacy`](skills/configure-codacy/SKILL.md) | Tailor Codacy configuration to your project and reduce noise |
+| [`configure-codacy-cloud`](skills/configure-codacy-cloud/SKILL.md) | Tune Codacy configuration directly on the cloud for a repo already analyzed by Codacy |
 | [`setup-coverage`](skills/setup-coverage/SKILL.md) | Set up test coverage reporting and upload to Codacy |
 | [`codacy-analysis-cli`](skills/codacy-analysis-cli/SKILL.md) | Run local static analysis using the Codacy Analysis CLI |
 

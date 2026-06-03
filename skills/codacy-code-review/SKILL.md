@@ -4,10 +4,12 @@ description: Enriches pull request code reviews with Codacy data — quality iss
 license: MIT
 metadata:
   author: Codacy
-  version: 1.3.0
+  version: 1.4.0
 ---
 
 # Codacy Code Review
+
+> **Glossary:** See [glossary.md](../../references/glossary.md) for shared definitions of Codacy concepts (issues, findings, severity, coverage, tools, patterns, etc.).
 
 This skill enriches code reviews with Codacy data. It works alongside any existing code review process (a code-review skill, CodeRabbit, manual review, etc.) — it adds Codacy-specific data on top.
 
@@ -36,7 +38,8 @@ The Analysis CLI may not support every tool that Codacy Cloud runs. If the proje
 - **Cloud data reflects the HEAD commit of the PR** — the remote analysis shown is always for the latest push to the PR branch, not a specific commit.
 - **Local analysis reflects the working tree** — `codacy-analysis analyze --pr` compares the current branch against the PR's target branch, catching issues even before pushing.
 - **Ignoring issues** is a Cloud-only operation — it takes effect immediately on Codacy but any other configuration changes (patterns, tools) only apply after the next remote analysis.
-- **Stale or missing remote analysis** — if the Cloud PR analysis appears outdated or incomplete, trigger a reanalysis: `codacy pull-request <provider> <org> <repo> <prNumber> --reanalyze`. Then re-run the pull-request command to check if analysis has completed before proceeding.
+- **Stale or missing remote analysis** — if the Cloud PR analysis appears outdated or incomplete, use `codacy pull-request <provider> <org> <repo> <prNumber> --reanalyze-and-wait` to trigger reanalysis and block until it completes (polls every 10 seconds, up to 20 minutes). For fire-and-forget, use `--reanalyze` instead and re-check manually.
+- **Auto-detection** — when running inside the repo, the Cloud CLI auto-detects provider/org/repo from the git remote. Commands like `codacy pull-request <prNumber>` work without explicit parameters.
 
 ## Review workflow
 
@@ -100,12 +103,12 @@ For the annotated diff with inline coverage annotations:
 codacy pull-request <provider> <org> <repo> <prNumber> --diff
 ```
 
-If the remote analysis is stale or missing, trigger a reanalysis:
+If the remote analysis is stale or missing, trigger a reanalysis and wait for completion:
 ```bash
-codacy pull-request <provider> <org> <repo> <prNumber> --reanalyze
+codacy pull-request <provider> <org> <repo> <prNumber> --reanalyze-and-wait
 ```
 
-While waiting for remote analysis, continue the review using local results from Step 2.
+This blocks until reanalysis finishes (up to 20 minutes) and reports the delta. While waiting, continue the review using local results from Step 2. For fire-and-forget reanalysis, use `--reanalyze` instead.
 
 ### Step 4: Check introduced issues
 

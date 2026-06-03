@@ -68,6 +68,7 @@ Helps with Codacy.
 | `codacy-cloud-cli` | Use the Codacy Cloud CLI: authentication, commands, help system |
 | `codacy-code-review` | Enrich code reviews with Codacy data |
 | `configure-codacy` | Tailor Codacy config to the project, reduce noise |
+| `configure-codacy-cloud` | Tune Codacy config directly on the cloud (repo already on Codacy), reduce noise |
 | `setup-coverage` | Set up test coverage reporting and upload to Codacy |
 | `codacy-analysis-cli` | Run local static analysis using the Codacy Analysis CLI |
 
