@@ -89,7 +89,7 @@ Tools can be enabled or disabled per repository. When a tool's configuration fil
 
 A specific check within a tool that detects a particular type of issue. For example, ESLint's `no-unused-vars` is a pattern that flags unused variables. Each pattern has:
 
-- A **severity** (Critical, Medium, or Minor).
+- A **severity** (Critical, High, Medium, or Minor).
 - A **category** (e.g., Security, Error Prone, Code Style).
 - Optional **parameters** that fine-tune behavior (thresholds, allowed values, etc.).
 
@@ -120,6 +120,7 @@ A problem detected in source code by a tool's pattern. Issues represent violatio
 | Severity | Icon | Meaning |
 |----------|------|---------|
 | Critical | Red | Most dangerous — potential security vulnerabilities, crashes, or serious compatibility problems |
+| High | Orange | Serious problems that should be fixed — likely bugs or high-impact violations |
 | Medium | Yellow | Violations of coding standards and conventions |
 | Minor | Blue | Least critical — code style, formatting, minor suggestions |
 
@@ -176,7 +177,7 @@ Authentication, Authorization, Command Injection, Cryptography, CSRF, Denial of 
 
 ### Severity
 
-A classification shared by both issues and findings that indicates how critical a problem is. The scale is **Critical > High > Medium > Low** for findings and **Critical > Medium > Minor** for quality issues. Severity is assigned by the pattern definition and can influence quality gate rules.
+A classification shared by both issues and findings that indicates how critical a problem is. The scale is **Critical > High > Medium > Low** for findings and **Critical > High > Medium > Minor** for quality issues. Severity is assigned by the pattern definition and can influence quality gate rules.
 
 ### Duplication
 
