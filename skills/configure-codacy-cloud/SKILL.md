@@ -21,7 +21,7 @@ For the local-first variant that discovers a stack from scratch and runs `codacy
 - **Codacy Analysis CLI** (`codacy-analysis`) — used **only** for config-file operations (`init --remote`, `init --auto`, `config --merge`). See `codacy-analysis-cli` for setup.
 - Both CLIs share credentials at `~/.codacy/credentials`, so a single login covers both.
 
-This skill has **two hard requirements**. Verify both before doing anything else and stop with clear guidance if either fails:
+This skill has **three hard requirements**. Verify all three before doing anything else and stop with clear guidance if any fails:
 
 1. **The repository is already on Codacy.** Confirm with:
    ```bash
@@ -34,6 +34,12 @@ This skill has **two hard requirements**. Verify both before doing anything else
    codacy issues -O -o json 2>/dev/null | jq '.'
    ```
    If the repo was never analyzed, or analysis is still running, stop. Tell the user to wait for the first analysis to finish — the whole flow depends on cloud issue data as the baseline.
+
+3. **The Cloud CLI exposes `fileCount`.** Confirm with:
+   ```bash
+   codacy repo -o json 2>/dev/null | jq -e '.repository | has("fileCount")'
+   ```
+   If this prints `false` (or errors), stop. The installed Cloud CLI is too old to populate the summary's `fileCount` field. Tell the user to upgrade (`npm install -g @codacy/codacy-cloud-cli@latest`) and rerun. Feature presence is checked rather than `--version` because the current CLI hardcodes its `--version` string.
 
 The Cloud CLI auto-detects `provider`, `organization`, and `repository` from the git remote when run inside the repo, so the explicit `<provider> <org> <repo>` arguments shown below are optional in practice.
 
@@ -130,7 +136,7 @@ Configuration Progress:
    jq '.repository.repository.languages | length' .codacy/tmp/repo.json   # → languageCount
    jq '.repository.fileCount'                    .codacy/tmp/repo.json   # → fileCount
    ```
-   These are snapshots of repo state, not before/after metrics — they go directly under `summary` as scalars. `fileCount` requires Cloud CLI ≥ 1.3.0; on older versions the field is absent and `jq` returns `null`, in which case record `fileCount: null` and continue.
+   These are snapshots of repo state, not before/after metrics — they go directly under `summary` as scalars.
 
 ### First pass
 
@@ -322,7 +328,7 @@ Write `.codacy/configure-codacy-cloud-summary.json`. `before` values come from t
 
 **Field reference**
 
-- **`summary`** — repo descriptors plus before/after counts. `languageCount` is the length of `.repository.repository.languages` from `codacy repo -o json`; `fileCount` is `.repository.fileCount` from the same call (requires Cloud CLI ≥ 1.3.0; record `null` on older versions). Both are snapshots of repo state taken once at startup, not before/after pairs. `enabledPatterns`/`enabledTools` count everything enabled on Codacy (supported + cloud-only). `issuesByCategory`/`issuesBySeverity` come from the issue overview's breakdowns (apply the `Error→Critical` / `High→High` / `Warning→Medium` / `Info→Minor` level mapping).
+- **`summary`** — repo descriptors plus before/after counts. `languageCount` is the length of `.repository.repository.languages` from `codacy repo -o json`; `fileCount` is `.repository.fileCount` from the same call. Both are snapshots of repo state taken once at startup, not before/after pairs. `enabledPatterns`/`enabledTools` count everything enabled on Codacy (supported + cloud-only). `issuesByCategory`/`issuesBySeverity` come from the issue overview's breakdowns (apply the `Error→Critical` / `High→High` / `Warning→Medium` / `Info→Minor` level mapping).
 - **`toolName`** (used in `toolChanges`, `patternChanges`, `conflicts`) — the tool's **name as shown by `codacy tools`** (the cloud-side identifier you actually store and act on). Note this can differ from the Analysis CLI config `toolId`.
 - **`toolChanges`** — one entry per whole tool enabled or disabled. `action`: `"enabled"` or `"disabled"`. `patternsAffected`: number of patterns in that tool.
 - **`patternChanges`** — one entry per individual pattern change within a tool that stays enabled. `action`: `"enabled"`, `"disabled"`, or `"updated"`. `deltaIssues`: change in this pattern's issue count, baseline vs final. `parameters`: array of `{id, before, after}` for tuned parameters, `[]` otherwise. Do not list patterns that were added/removed as part of a whole-tool change — those are covered by `toolChanges`.
