@@ -35,11 +35,11 @@ This skill has **three hard requirements**. Verify all three before doing anythi
    ```
    If the repo was never analyzed, or analysis is still running, stop. Tell the user to wait for the first analysis to finish — the whole flow depends on cloud issue data as the baseline.
 
-3. **The Cloud CLI exposes `fileCount`.** Confirm with:
+3. **The Cloud CLI populates `fileCount`.** Confirm with:
    ```bash
-   codacy repo -o json 2>/dev/null | jq -e '.repository | has("fileCount")'
+   codacy repo -o json 2>/dev/null | jq -e '.repository.fileCount != null'
    ```
-   If this prints `false` (or errors), stop. The installed Cloud CLI is too old to populate the summary's `fileCount` field. Tell the user to upgrade (`npm install -g @codacy/codacy-cloud-cli@latest`) and rerun. Feature presence is checked rather than `--version` because the current CLI hardcodes its `--version` string.
+   If this prints `false` (or errors), stop. The installed Cloud CLI is too old to populate the summary's `fileCount` field. Tell the user to upgrade (`npm install -g @codacy/codacy-cloud-cli@latest`) and rerun. The check uses `!= null` rather than `has("fileCount")` so it rejects both absent keys and explicit nulls, and feature presence is checked rather than `--version` because the current CLI hardcodes its `--version` string.
 
 The Cloud CLI auto-detects `provider`, `organization`, and `repository` from the git remote when run inside the repo, so the explicit `<provider> <org> <repo>` arguments shown below are optional in practice.
 
@@ -130,13 +130,13 @@ Configuration Progress:
    ```
    For **cloud-only** tools, add their enabled-pattern counts: `codacy patterns <tool> --enabled -o json 2>/dev/null | jq 'length'` per tool — but mind the pagination caveat above: this is capped at 100, so a cloud-only tool with more than 100 enabled patterns will be undercounted. <!-- TODO(--limit): once `codacy patterns` supports `--limit`, pass `--limit <n>` here to get an accurate cloud-only count and drop the 100-cap workaround. --> The BEFORE `enabledPatterns` is the sum of the supported-tool count and the cloud-only counts; BEFORE `enabledTools` is the enabled-tool count.
 
-7. **Capture repo-level descriptors** for the summary (single source: the same `codacy repo -o json` call used in step 5):
+7. **Capture repo-level descriptors** for the summary:
    ```bash
    codacy repo -o json 2>/dev/null > .codacy/tmp/repo.json
    jq '.repository.repository.languages | length' .codacy/tmp/repo.json   # → languageCount
    jq '.repository.fileCount'                    .codacy/tmp/repo.json   # → fileCount
    ```
-   These are snapshots of repo state, not before/after metrics — they go directly under `summary` as scalars.
+   Caches the response to disk so both fields are read from a single invocation. These are snapshots of repo state, not before/after metrics — they go directly under `summary` as scalars.
 
 ### First pass
 
