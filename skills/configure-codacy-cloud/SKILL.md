@@ -4,7 +4,7 @@ description: Tunes an existing Codacy Cloud repository's configuration directly 
 license: MIT
 metadata:
   author: Codacy
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # Configure Codacy (Cloud)
@@ -21,7 +21,7 @@ For the local-first variant that discovers a stack from scratch and runs `codacy
 - **Codacy Analysis CLI** (`codacy-analysis`) — used **only** for config-file operations (`init --remote`, `init --auto`, `config --merge`). See `codacy-analysis-cli` for setup.
 - Both CLIs share credentials at `~/.codacy/credentials`, so a single login covers both.
 
-This skill has **two hard requirements**. Verify both before doing anything else and stop with clear guidance if either fails:
+This skill has **three hard requirements**. Verify all three before doing anything else and stop with clear guidance if any fails:
 
 1. **The repository is already on Codacy.** Confirm with:
    ```bash
@@ -34,6 +34,12 @@ This skill has **two hard requirements**. Verify both before doing anything else
    codacy issues -O -o json 2>/dev/null | jq '.'
    ```
    If the repo was never analyzed, or analysis is still running, stop. Tell the user to wait for the first analysis to finish — the whole flow depends on cloud issue data as the baseline.
+
+3. **The Cloud CLI is ≥ 1.3.0** (required to populate `fileCount`). Confirm with:
+   ```bash
+   codacy repo -o json 2>/dev/null | jq -e '.repository.fileCount != null'
+   ```
+   If this prints `false` (or errors), stop. The installed Cloud CLI is older than 1.3.0 and does not populate the summary's `fileCount` field. Tell the user to upgrade to at least 1.3.0 (`npm install -g @codacy/codacy-cloud-cli@latest`) and rerun. The check uses `!= null` rather than `has("fileCount")` so it rejects both absent keys and explicit nulls, and feature presence is checked rather than `--version` because the current CLI hardcodes its `--version` string.
 
 The Cloud CLI auto-detects `provider`, `organization`, and `repository` from the git remote when run inside the repo, so the explicit `<provider> <org> <repo>` arguments shown below are optional in practice.
 
@@ -124,6 +130,14 @@ Configuration Progress:
    ```
    For **cloud-only** tools, add their enabled-pattern counts: `codacy patterns <tool> --enabled -o json 2>/dev/null | jq 'length'` per tool — but mind the pagination caveat above: this is capped at 100, so a cloud-only tool with more than 100 enabled patterns will be undercounted. <!-- TODO(--limit): once `codacy patterns` supports `--limit`, pass `--limit <n>` here to get an accurate cloud-only count and drop the 100-cap workaround. --> The BEFORE `enabledPatterns` is the sum of the supported-tool count and the cloud-only counts; BEFORE `enabledTools` is the enabled-tool count.
 
+7. **Capture repo-level descriptors** for the summary:
+   ```bash
+   codacy repo -o json 2>/dev/null > .codacy/tmp/repo.json
+   jq '.repository.repository.languages | length' .codacy/tmp/repo.json   # → languageCount
+   jq '.repository.fileCount'                    .codacy/tmp/repo.json   # → fileCount
+   ```
+   Caches the response to disk so both fields are read from a single invocation. These are snapshots of repo state, not before/after metrics — they go directly under `summary` as scalars.
+
 ### First pass
 
 1. **Generate a higher-signal auto config:**
@@ -213,6 +227,8 @@ Write `.codacy/configure-codacy-cloud-summary.json`. `before` values come from t
 ```json
 {
   "summary": {
+    "languageCount": 4,
+    "fileCount": 83,
     "enabledPatterns": { "before": 1000, "after": 300 },
     "enabledTools": { "before": 34, "after": 15 },
     "issues": { "before": 7000, "after": 550 },
@@ -312,7 +328,7 @@ Write `.codacy/configure-codacy-cloud-summary.json`. `before` values come from t
 
 **Field reference**
 
-- **`summary`** — before/after counts. `enabledPatterns`/`enabledTools` count everything enabled on Codacy (supported + cloud-only). `issuesByCategory`/`issuesBySeverity` come from the issue overview's breakdowns (apply the `Error→Critical` / `High→High` / `Warning→Medium` / `Info→Minor` level mapping).
+- **`summary`** — repo descriptors plus before/after counts. `languageCount` is the length of `.repository.repository.languages` from `codacy repo -o json`; `fileCount` is `.repository.fileCount` from the same call. Both are snapshots of repo state taken once at startup, not before/after pairs. `enabledPatterns`/`enabledTools` count everything enabled on Codacy (supported + cloud-only). `issuesByCategory`/`issuesBySeverity` come from the issue overview's breakdowns (apply the `Error→Critical` / `High→High` / `Warning→Medium` / `Info→Minor` level mapping).
 - **`toolName`** (used in `toolChanges`, `patternChanges`, `conflicts`) — the tool's **name as shown by `codacy tools`** (the cloud-side identifier you actually store and act on). Note this can differ from the Analysis CLI config `toolId`.
 - **`toolChanges`** — one entry per whole tool enabled or disabled. `action`: `"enabled"` or `"disabled"`. `patternsAffected`: number of patterns in that tool.
 - **`patternChanges`** — one entry per individual pattern change within a tool that stays enabled. `action`: `"enabled"`, `"disabled"`, or `"updated"`. `deltaIssues`: change in this pattern's issue count, baseline vs final. `parameters`: array of `{id, before, after}` for tuned parameters, `[]` otherwise. Do not list patterns that were added/removed as part of a whole-tool change — those are covered by `toolChanges`.
