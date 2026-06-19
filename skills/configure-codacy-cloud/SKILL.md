@@ -35,11 +35,11 @@ This skill has **three hard requirements**. Verify all three before doing anythi
    ```
    If the repo was never analyzed, or analysis is still running, stop. Tell the user to wait for the first analysis to finish — the whole flow depends on cloud issue data as the baseline.
 
-3. **The Cloud CLI populates `fileCount`.** Confirm with:
+3. **The Cloud CLI is ≥ 1.3.0** (required to populate `fileCount`). Confirm with:
    ```bash
    codacy repo -o json 2>/dev/null | jq -e '.repository.fileCount != null'
    ```
-   If this prints `false` (or errors), stop. The installed Cloud CLI is too old to populate the summary's `fileCount` field. Tell the user to upgrade (`npm install -g @codacy/codacy-cloud-cli@latest`) and rerun. The check uses `!= null` rather than `has("fileCount")` so it rejects both absent keys and explicit nulls, and feature presence is checked rather than `--version` because the current CLI hardcodes its `--version` string.
+   If this prints `false` (or errors), stop. The installed Cloud CLI is older than 1.3.0 and does not populate the summary's `fileCount` field. Tell the user to upgrade to at least 1.3.0 (`npm install -g @codacy/codacy-cloud-cli@latest`) and rerun. The check uses `!= null` rather than `has("fileCount")` so it rejects both absent keys and explicit nulls, and feature presence is checked rather than `--version` because the current CLI hardcodes its `--version` string.
 
 The Cloud CLI auto-detects `provider`, `organization`, and `repository` from the git remote when run inside the repo, so the explicit `<provider> <org> <repo>` arguments shown below are optional in practice.
 
