@@ -4,7 +4,7 @@ description: Uses the Codacy Cloud CLI to query repositories, issues, security f
 license: MIT
 metadata:
   author: Codacy
-  version: 1.5.0
+  version: 1.6.0
 ---
 
 # Codacy Cloud CLI
@@ -151,6 +151,8 @@ Filters: `--branch`, `--patterns`, `--severities` (Critical,High,Medium,Minor), 
 
 Ignore reasons: `AcceptedUse` (default) | `FalsePositive` | `NotExploitable` | `TestCode` | `ExternalCode`
 
+**Affected functions:** for SCA issues linked to an advisory (CVE or GHSA) with known affected functions, `issues`/`issue` show them alongside the regular output — a compact `Vulnerable functions: fn1, fn2 (+N more)` line on list/card views, and a full `Vulnerable Functions (<advisoryId>)` block with published date on `codacy issue` detail views. Always included in `--output json` when present. Use this to tell a user exactly which functions a vulnerability affects, so they (or their coding agent) can check whether their code actually calls them before deciding to upgrade the dependency or ignore the finding as `NotExploitable`.
+
 ### Security findings
 
 ```bash
@@ -161,7 +163,7 @@ codacy findings gh my-org my-repo --severities Critical,High
 codacy findings gh my-org my-repo --statuses Overdue,DueSoon
 codacy findings gh my-org my-repo --limit 500   # fetch up to N results (default 100, max 1000)
 
-# Full details for a single finding (includes CVE data)
+# Full details for a single finding (includes CVE data and, for SCA findings, affected functions)
 codacy finding gh my-org my-repo <findingId>
 
 # Ignore / unignore a finding
@@ -173,6 +175,8 @@ codacy finding gh my-org my-repo <findingId> --unignore
 Filters: `--search`, `--severities` (Critical,High,Medium,Low), `--statuses` (Overdue,OnTrack,DueSoon,ClosedOnTime,ClosedLate,Ignored), `--categories`, `--scan-types`, `--dast-targets`
 
 Ignore reasons: `AcceptedUse` (default) | `FalsePositive` | `NotExploitable` | `TestCode` | `ExternalCode`
+
+Same affected-functions behavior as `issues`/`issue` above applies to `findings`/`finding` (compact line on the list, full block on the detail view).
 
 ### Pull requests
 
@@ -285,3 +289,9 @@ codacy repository gh my-org my-repo -w -o json    # JSON delta report with issue
 ```bash
 codacy issues gh my-org my-repo --overview        # see false positive counts and suggested actions to reduce noise
 ```
+
+**Check whether a vulnerable dependency is actually reachable:**
+```bash
+codacy issue gh my-org my-repo <issueId>          # or: codacy finding gh my-org my-repo <findingId>
+```
+If the output includes a `Vulnerable Functions` block, search the repo for calls to those functions (including re-exports and wrapper functions). If none are found, ignore the issue/finding with `--ignore-reason NotExploitable`; otherwise recommend upgrading the dependency.
