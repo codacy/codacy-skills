@@ -4,7 +4,7 @@ description: Uses the Codacy Cloud CLI to query repositories, issues, security f
 license: MIT
 metadata:
   author: Codacy
-  version: 1.6.0
+  version: 1.6.1
 ---
 
 # Codacy Cloud CLI
@@ -295,3 +295,15 @@ codacy issues gh my-org my-repo --overview        # see false positive counts an
 codacy issue gh my-org my-repo <issueId>          # or: codacy finding gh my-org my-repo <findingId>
 ```
 If the output includes a `Vulnerable Functions` block, search the repo for calls to those functions (including re-exports and wrapper functions). If none are found, ignore the issue/finding with `--ignore-reason NotExploitable`; otherwise recommend upgrading the dependency.
+
+**Audit vulnerable dependencies across one or multiple repos at once:**
+```bash
+# one repo
+codacy findings gh my-org my-repo --scan-types SCA --output json
+
+# multiple repos
+for repo in my-repo-one my-repo-two; do
+  codacy findings gh my-org "$repo" --scan-types SCA --output json
+done | jq -s '{findings: (map(.findings) | add)}'
+```
+Keep only findings where `advisoryInformation.vulnerableFunctions` is a non-empty array — it's sometimes present but empty, which means no reachability check is possible. For each, `dependencyChains` tells you Direct (a single package) vs. Transitive (2+ packages — the first package in the chain is the one to upgrade); when `dependencyChains` is missing entirely, Codacy hasn't resolved the import path, so treat it as unknown rather than assuming Direct — plenty of transitive packages (verified against real `package.json`/lockfile data) show up with no chain at all. For each repository above, search your local checkout for calls to the listed functions, then report back per repository — used/not used, chain status, recommendation — and wait for confirmation before ignoring anything with `--ignore-reason NotExploitable` or applying an upgrade.
