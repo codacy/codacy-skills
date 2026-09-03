@@ -138,6 +138,15 @@ Configuration Progress:
    ```
    Caches the response to disk so both fields are read from a single invocation. These are snapshots of repo state, not before/after metrics — they go directly under `summary` as scalars.
 
+## Hard rules
+
+These override any noise-reduction judgment in the passes below. Never break them:
+
+1. **Never disable a Security-category pattern**, or a tool that only runs Security patterns.
+2. **Never recommend `ignorePaths` for infrastructure folders** — `infra/`, `terraform/`, `k8s/`, `helm/`, `.github/`.
+3. **Never recommend changes to a coding standard.** Record the lock in `conflicts[]` and stop.
+4. **Don't count removed patterns for languages absent from the repo as improvements.** Codacy only runs a pattern on files of its language, so removing one has no effect there.
+
 ### First pass
 
 1. **Generate a higher-signal auto config:**
@@ -190,7 +199,7 @@ Configuration Progress:
 2. **Second noise evaluation — sharpen the signal:**
    - **Reduce remaining noisy patterns** that survived the first pass.
    - **Judge the newly enabled patterns:** did they surface *relevant* issues, or noise? Disable patterns that turned out irrelevant for this codebase or that only produced false positives (apply the same caution to Security patterns described in the guidance below).
-   - **Net-issue guardrail:** one goal of this skill is *fewer, more relevant* results. If the total issue count rose markedly versus the baseline, decide what to cut from the newly enabled set — a final count above the baseline is a red flag **unless** one of these holds: (a) the repo started from a very minimal configuration (some growth is expected and healthy), or (b) the dominant baseline noise is **enforced by a coding standard** and therefore could not be cut from the repo. In case (b), a flat or higher total is an expected outcome, **not** a failure — record the locked patterns/tools in `conflicts[]` with a recommendation to edit the standard, and do **not** over-cut genuinely useful new findings (especially Security) just to force the headline number down. Be smart: keep the high-value new findings, trim the rest.
+   - **Net-issue guardrail:** one goal of this skill is *fewer, more relevant* results. If the total issue count rose markedly versus the baseline, decide what to cut from the newly enabled set — a final count above the baseline is a red flag **unless** one of these holds: (a) the repo started from a very minimal configuration (some growth is expected and healthy), or (b) the dominant baseline noise is **enforced by a coding standard** and therefore could not be cut from the repo. In case (b), a flat or higher total is an expected outcome, **not** a failure — record the locked patterns/tools in `conflicts[]`, and do **not** over-cut genuinely useful new findings (especially Security) just to force the headline number down. Be smart: keep the high-value new findings, trim the rest.
 
 3. **Apply the changes again** with the same dual mechanism (edit `.codacy/auto.config.json` + `codacy tools --import .codacy/auto.config.json` for supported tools; `codacy pattern`/`patterns`/`tool` for cloud-only). Record any new 409 conflicts in `conflicts[]`.
 
@@ -307,14 +316,14 @@ Write `.codacy/configure-codacy-cloud-summary.json`. `before` values come from t
       "toolName": "Biome",
       "conflict": "EnforcedByCodingStandard",
       "codingStandardName": "Default Security Rules",
-      "reason": "Whole-tool conflict (no patternId). Biome is redundant with the project's ESLint9 yet produces most of the noise; disabling the tool was rejected with 409 because a coding standard enforces it. Recommend removing Biome from the coding standard."
+      "reason": "Whole-tool conflict (no patternId). Biome is redundant with the project's ESLint9 yet produces most of the noise; disabling the tool was rejected with 409 because a coding standard enforces it. Locked by coding standard; no repo-level action."
     },
     {
       "patternId": "Semgrep_codacy.javascript.avoid_undefined_identifier",
       "toolName": "Semgrep",
       "conflict": "EnforcedByCodingStandard",
       "codingStandardName": "Default Security Rules",
-      "reason": "Reports 1k+ low-relevance issues but is enforced by a coding standard, so it could not be disabled. Recommend disabling it in the coding standard."
+      "reason": "Reports 1k+ low-relevance issues but is enforced by a coding standard, so it could not be disabled. Locked by coding standard; no repo-level action."
     },
     {
       "patternId": "ESLint9_unused_import",
@@ -334,7 +343,7 @@ Write `.codacy/configure-codacy-cloud-summary.json`. `before` values come from t
 - **`patternChanges`** — one entry per individual pattern change within a tool that stays enabled. `action`: `"enabled"`, `"disabled"`, or `"updated"`. `deltaIssues`: change in this pattern's issue count, baseline vs final. `parameters`: array of `{id, before, after}` for tuned parameters, `[]` otherwise. Do not list patterns that were added/removed as part of a whole-tool change — those are covered by `toolChanges`.
 - **`recommendedPathsToIgnore`** — array of `{path, reason}`. Recommendations only; nothing is written to the repo.
 - **`keyImprovements`** — 3–6 human-readable sentences summarizing the most impactful changes, suitable to present to the user.
-- **`conflicts`** — array of changes that were attempted but blocked. `patternId` is **optional**: **omit it for whole-tool conflicts** (e.g. a tool that can't be disabled because a standard enforces it), and **include it for pattern-level conflicts**. `conflict`: `"EnforcedByCodingStandard"` (include `codingStandardName`) or `"ConfigurationFile"`. `reason`: what it reports and the recommended action (edit the coding standard / edit the tool's own config file).
+- **`conflicts`** — array of changes that were attempted but blocked. `patternId` is **optional**: **omit it for whole-tool conflicts** (e.g. a tool that can't be disabled because a standard enforces it), and **include it for pattern-level conflicts**. `conflict`: `"EnforcedByCodingStandard"` (include `codingStandardName`) or `"ConfigurationFile"`. `reason`: what it reports. For `EnforcedByCodingStandard`, state that it is locked — no recommended action. For `ConfigurationFile`, include the recommended action (edit the tool's own config file).
 
 ## Noise-evaluation guidance
 
