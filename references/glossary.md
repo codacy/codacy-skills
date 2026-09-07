@@ -139,6 +139,155 @@ A problem detected in source code by a tool's pattern. Issues represent violatio
 
 Issues are measured as a density: **issues per thousand lines of code (kLoC)** for cross-repository comparison.
 
+### Issue counts on a diff: Total, New, Fixed
+
+> Synonyms: **delta**, **delta issues**, **introduced/resolved issues**
+
+Codacy reports three numbers for a commit or pull request, and they are **not** related by arithmetic. Total is a snapshot of the whole codebase; New and Fixed are properties of the **diff**. Before trying to reconcile them, read [Why New and Fixed are not deltas between totals](#why-new-and-fixed-are-not-deltas-between-totals).
+
+#### Total
+
+The issues attached to the commit — the whole codebase at that point, not a delta. It needs no parent and no diff, so it is reported even when New and Fixed cannot be computed.
+
+#### Issue identity
+
+New and Fixed are set differences over an issue **identity** (`uuid`): an MD5 hash of the filename, the pattern's internal ID, the line text with all whitespace removed, and the tool's `sourceId` where it provides one (the CVE, for Trivy/SCA).
+
+Identity deliberately excludes the **line number** and the **message**:
+
+- Code moving up or down a file does not re-identify its issues.
+- Two identical lines flagged by the same pattern in one file collapse to a single identity.
+- Editing a flagged line's text *does* re-identify it — the source of most Fixed/New churn.
+
+Line text is truncated at 512 characters before hashing, so on very long lines (minified assets, lock files) distinct issues can share an identity.
+
+#### How New and Fixed are computed
+
+The baseline is the **first parent** for a commit, the **destination (base) commit** for a pull request.
+
+1. **Scope to changed files.** Both issue sets are filtered to the files the diff touched. This filter is applied *before* everything else, so an issue in an untouched file cannot reach **any** of the four buckets — not Fixed, and not Possible fixed either, however the set changed.
+2. **Raw set difference** by identity: raw new = in head, not in baseline; raw fixed = in baseline, not in head.
+3. **Diff-line confirmation** — the defining step. A raw new issue is **New** only if its start line is a line the diff **added**; a raw fixed issue is **Fixed** only if its start line is a line the diff **removed** (baseline numbering).
+4. **Cancellation.** If the same pattern, file and start line appears in both raw sets, both are dropped from the confirmed buckets (they fall through to the possible ones).
+
+#### Possible New / Possible Fixed
+
+> Synonyms: **potential issues**, `onlyPotential`
+
+Whatever steps 3 and 4 rejected, stored as their own delta types (`PossibleNewIssue`, `PossibleFixedIssue`):
+
+- **Possible new** — appeared in a changed file, but not on a line the diff added.
+- **Possible fixed** — disappeared from a changed file, but not because a line carrying it was removed.
+
+**Possible is still scoped to the changed files** — it inherits step 1's filter, and is only ever the leftovers of steps 3 and 4. So the three tiers are:
+
+| Where the issue lives | Bucket |
+|---|---|
+| In a changed file, on a line the diff added/removed | **New** / **Fixed** |
+| In a changed file, but not on such a line (or cancelled at step 4) | **Possible new** / **Possible fixed** |
+| In a file the diff did not touch | **Nothing at all** — invisible to every bucket |
+
+That third tier is the one that surprises people: an issue can vanish between two commits and be reported *nowhere*, because possible is not a catch-all for "everything else that changed" — only for "everything else **in the changed files**".
+
+"Possible" therefore means **the issue set changed inside the diff's files, but the diff's lines do not explain it** — not a lower-confidence issue, and nothing to do with suggested fixes. Typical causes: the issue shifted because of edits elsewhere in the file, the surrounding code was reflowed, the tool version or configuration changed, or a pattern was enabled or disabled.
+
+#### What "Fixed" does and does not mean
+
+**Fixed does not mean the issue is gone.** It means *a line carrying it was deleted in this diff*:
+
+- Deleting code, or a whole file, counts as Fixed for every issue on the removed lines — nothing was repaired.
+- Disabling a pattern produces **no** Fixed: untouched files are out of scope, and in changed files it lands in Possible fixed.
+- An issue that genuinely went away may be absent from Fixed entirely — as Possible fixed if its file was touched, and as nothing at all if it was not.
+- Rewriting a flagged line usually yields Fixed **and** New — the same problem under a new identity.
+
+#### Headline counters vs. the issue lists
+
+The overview counters — a commit's `newIssues`/`fixedIssues`, PR summaries, and [quality gate](#quality-gate) thresholds — count **only confirmed** New and Fixed. The possible buckets are excluded from all of them.
+
+#### Why New and Fixed are not deltas between totals
+
+The recurring question is *"the parent had 500 issues, this commit has 400 — why is Fixed only 50?"*, and sometimes its opposite, *"Fixed is bigger than the drop"*. Both are expected: **Fixed is a diff-attributed event count, not a subtraction.** An issue counts as Fixed only if it lived in a file the diff touched, vanished, **and** sat on a line the diff removed. Everything else changes Total while the counters stay put.
+
+**Fixed smaller than the drop in Total**
+
+- **Untouched files are out of scope** — disabling a pattern or tool, a coding-standard change, a tool upgrade, or a change to ignored paths or detected languages all reduce Total with **zero** Fixed *and zero Possible fixed*. This is normally the bulk of an unexplained drop, and no query against the delta will surface it.
+- **Ignoring an issue deletes it** from the snapshot at the next analysis, so it leaves Total without ever being Fixed.
+- **Possible fixed is excluded** from the counters — including the pairs cancellation moved there.
+- **Renames drop the fixed side.** Diff rows are keyed to the *new* path and `fileDataId` is per `(project, filename)`, so a renamed file's old-path issues are out of scope entirely, while its new-path issues are re-identified (filename is hashed) and count as New or Possible new. A pure rename with no content change emits no diff chunks, so it produces neither.
+- **Deltas may not have run at all** — see [When New and Fixed are missing altogether](#when-new-and-fixed-are-missing-altogether).
+
+**Fixed larger than the drop in Total**
+
+Almost always **identity churn**: the same problem re-identified, contributing 1 Fixed *and* 1 New for no net change. Any of the four hashed inputs can trigger it.
+
+| Changed input | Typical trigger |
+|---|---|
+| Filename | File moved or renamed → every issue in it |
+| Pattern internal ID | Tool upgrade renames a rule → every issue from that rule |
+| Line text | The flagged line edited, reformatted or requoted; a formatter run |
+| `sourceId` | A tool starts, stops or changes what it reports (e.g. Trivy CVEs) |
+
+Whether a churned pair is *counted* comes down to step 4: editing a line **in place** puts both halves on the same start line, so they cancel — but the same edit **after lines were inserted or removed above it** shifts the start line, cancellation misses, and the pair counts as 1 New + 1 Fixed. That is the main engine behind inflated Fixed counts.
+
+Related traps:
+
+- **The message is a red herring.** A churned pair often shows different messages on the Fixed and New rows, which reads like the message caused it. It cannot: the message is not hashed, and a changed message is written in place onto the existing identity. Differing messages are *evidence* of churn — look for a renamed rule or an edited line instead.
+- **A historical mass event.** Adding `sourceId` to the hash (UUID v1 → v2, rolled out to all customers) re-identified every issue from every tool that reports one, so commits spanning that rollout show large Fixed/New pairs that say nothing about the code.
+- **Copied-forward (`dirty`) results.** A file that fails analysis has its previous results carried forward so the snapshot stays complete. These take part in deltas like real results, so a file that errors on one commit and succeeds on the next churns from the pipeline, not the code.
+
+**Practical guidance**
+
+- Read Fixed as *"issues on lines this diff deleted"*, never *"issues resolved"*.
+- To reconcile a Total drop, compare the two snapshots directly rather than subtracting, and ask separately whether configuration changed between them.
+- When New and Fixed are both unexpectedly large, suspect a rename, a tool or pattern-set change, or a reformat before treating either as signal.
+- Include the possible buckets (a second call with `onlyPotential=true`) whenever the question is "what changed?" rather than "what did the gate count?".
+
+#### Aggregating Fixed over a period
+
+Everything above concerns a **single** commit or pull request. Summing Fixed across a date range is a further step, and it breaks in its own way: **Fixed is recorded per commit, so a period total counts events, not distinct issues.**
+
+Every analyzed commit gets its own delta against its first parent. So one removal is attributed repeatedly:
+
+- each commit of a pull request, **and** the merge commit that lands it, are separate deltas over overlapping content;
+- a rebase or force-push replays the same content as new commits, each with its own delta;
+- an issue that keeps being re-identified ([churn](#why-new-and-fixed-are-not-deltas-between-totals)) contributes one Fixed event per commit that touches it.
+
+A period total therefore has **no ceiling related to the repository's issue count**: a repo holding 40 issues can legitimately report thousands of Fixed in a month, and a repo holding zero issues at both ends of a window can report a non-zero total.
+
+Consequences for reporting:
+
+- **Period Fixed is not a remediation KPI** and cannot be reconciled against `Total(start) − Total(end)`. The two answer different questions and are not in the same units.
+- To measure whether the issue burden fell, compare **Total** at the two dates. To count distinct issues actually resolved, compare the issue **identities** present at each date — Fixed does not provide this.
+- `Total(start) − Total(end)` is also not a floor for "issues resolved": a repo that adds 100 and removes 100 nets zero while genuinely removing 100.
+
+#### API surface
+
+The confirmed/possible split is expressed by two independent request parameters, not by the response:
+
+| Parameter | Values | Meaning |
+|-----------|--------|---------|
+| `status` | `all`, `new`, `fixed` | Which side of the delta to return (default `all`) |
+| `onlyPotential` | `true`, `false` | `false` (default) returns only **confirmed**; `true` returns **only the possible ones** |
+
+`onlyPotential` is a **switch, not an "include"** — there is no single call that returns confirmed and possible together; issue two calls and merge.
+
+The public `deltaType` enum has only `Added` and `Fixed`: `PossibleNewIssue` collapses onto `Added` and `PossibleFixedIssue` onto `Fixed`. **A returned `deltaType` therefore cannot tell you whether an issue was confirmed or possible** — only the `onlyPotential` value you sent can.
+
+Endpoints carrying both parameters: `listCommitDeltaIssues`, `listPullRequestIssues`, `listCommitClones`, `listPullRequestClones`.
+
+#### When New and Fixed are missing altogether
+
+Delta computation is **skipped** — leaving New and Fixed at 0 while Total is still reported — when:
+
+- the baseline commit no longer holds full data (data retention has trimmed it), or
+- no diff is available for the comparison.
+
+A `0 / 0` delta on an analyzed commit is therefore ambiguous: it can mean "nothing changed" or "we could not tell". Check whether the commit was analyzed and whether a baseline exists before reading it as a clean diff.
+
+#### Clones
+
+[Clones](#clone) have their own New/Fixed delta, matched by code hash over the changed files. There are **no possible variants** for clones, so `onlyPotential=true` on the clone endpoints returns nothing.
+
 ### Finding
 
 > Synonyms: **security finding**, **security issue**, **vulnerability**
