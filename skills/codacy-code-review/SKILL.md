@@ -4,7 +4,7 @@ description: Enriches pull request code reviews with Codacy data — quality iss
 license: MIT
 metadata:
   author: Codacy
-  version: 1.4.0
+  version: 1.5.0
 ---
 
 # Codacy Code Review
@@ -71,22 +71,25 @@ Run the Analysis CLI to get immediate results on the changed files — no need t
 
 ```bash
 # If the PR already exists (compares against the PR's target branch)
-codacy-analysis analyze --pr --output-format json
+codacy-analysis analyze --pr --fail-if-missing --output-format json
 
 # If the PR hasn't been created yet (compares against the merge base of the current branch)
-codacy-analysis analyze --diff --output-format json
+codacy-analysis analyze --diff --fail-if-missing --output-format json
 ```
 
 Use `--pr` when the pull request exists, `--diff` when you're reviewing changes on a branch before the PR is opened. Both run all locally available tools on the changed files only.
 
-If the project hasn't been initialized for local analysis yet:
+**`--fail-if-missing` matters here:** without it an unavailable scanner is silently skipped and the run still exits `0` with no issues — reaching the reviewer as "no issues introduced" when nothing was scanned.
+
+If the run is blocked (`errors[].kind == "UnavailableTools"`) or the project isn't initialized, install first, then re-run the strict command (the two flags can't be combined):
 
 ```bash
-codacy-analysis init
+codacy-analysis init   # only if not initialized
 codacy-analysis analyze --pr --install-dependencies --output-format json
+codacy-analysis analyze --pr --fail-if-missing --output-format json
 ```
 
-Parse the local results for issues — these are available immediately and cover the bulk of the review. Note any tools listed in `capability.unavailable` that might provide additional findings only through Codacy Cloud.
+Parse the local results for issues — available immediately, covering the bulk of the review. Before concluding a PR introduced no issues, confirm `toolResults` is non-empty (empty means nothing was scanned) and carry any `capability.unavailable` or cloud-only tools into [Analysis coverage](#step-8-summary).
 
 ### Step 3: Fetch Cloud PR data (coverage, quality gate)
 
@@ -168,7 +171,10 @@ Present a structured review summary:
 [Pass / Fail — from Codacy PR analysis]
 
 ### Issues introduced
-[List issues by severity, or "None"]
+[List issues by severity, or "None — see Analysis coverage"]
+
+### Analysis coverage
+[Tools that ran; any skipped (with reason) or cloud-only]
 
 ### Coverage
 [Delta, uncovered lines in new code]
