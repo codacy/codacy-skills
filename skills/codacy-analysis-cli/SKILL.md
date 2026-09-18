@@ -4,7 +4,7 @@ description: Uses the Codacy Analysis CLI to run local static analysis on reposi
 license: MIT
 metadata:
   author: Codacy
-  version: 1.4.0
+  version: 1.5.0
 ---
 
 # Codacy Analysis CLI
@@ -14,6 +14,8 @@ metadata:
 The Codacy Analysis CLI (`codacy-analysis`) runs static analysis locally on a repository. It detects languages, selects tools, and reports issues — without pushing code to Codacy. This is a different tool from the Codacy Cloud CLI (`codacy`), which queries remote Codacy data.
 
 Always use `--output-format json` for structured output in agentic workflows.
+
+For gating runs (pre-commit, PR review, CI), also pass `--fail-if-missing` — see [Strict mode](#strict-mode).
 
 ## Setup
 
@@ -213,7 +215,7 @@ codacy-analysis analyze --inspect --output-format json | jq '.capability.ready[]
 codacy-analysis analyze --inspect --output-format json | jq '.capability.unavailable[] | {toolId, reason, remediation}'
 ```
 
-**Important:** `--inspect` and `--install-dependencies` are mutually exclusive. Use `--inspect` first to check readiness, then `--install-dependencies` to install and run in a single step.
+**Important:** `--inspect`, `--install-dependencies`, and `--fail-if-missing` are **all mutually exclusive** — combining any two exits `2`. Use them in sequence: `--inspect` to check readiness, `--install-dependencies` to install and run, `--fail-if-missing` on later runs.
 
 **Decision point:**
 - If all needed tools are in `capability.ready` → skip to Step 4
@@ -282,17 +284,17 @@ codacy-analysis analyze --config-file .codacy/auto-config.json --output-format j
 
 #### Git-aware scoping
 
-Analyze only the code that changed, instead of the full repository:
+Analyze only the code that changed, instead of the full repository. These are typically gate checks, so include `--fail-if-missing` ([Strict mode](#strict-mode)):
 
 ```bash
 # Only files staged for commit
-codacy-analysis analyze --staged --output-format json
+codacy-analysis analyze --staged --fail-if-missing --output-format json
 
 # Changes relative to the current branch's merge base (uncommitted + committed)
-codacy-analysis analyze --diff --output-format json
+codacy-analysis analyze --diff --fail-if-missing --output-format json
 
 # Changes in a pull request (compares against the PR's target branch)
-codacy-analysis analyze --pr --output-format json
+codacy-analysis analyze --pr --fail-if-missing --output-format json
 ```
 
 These flags work with `--tool`, `--files`, and all other analyze options. When combined with `--files`, the intersection is used (files that match both the git scope and the file filter).
@@ -309,11 +311,17 @@ codacy-analysis analyze --tool-timeout 600000 --output-format json
 
 #### Strict mode
 
-Fail immediately if any configured tool is unavailable (instead of skipping it):
+By default an unavailable tool is silently skipped: the run still exits `0` with an empty `issues` array, so a scan that ran no scanners looks clean. `--fail-if-missing` makes it a hard stop:
 
 ```bash
 codacy-analysis analyze --fail-if-missing --output-format json
 ```
+
+The run halts before analysis and exits `2` with `errors[].kind == "UnavailableTools"` — match on that, not the exit code, which is overloaded.
+
+Two caveats: the check covers **every configured tool**, not just those matching the changed files (narrow it with `--tool <id>`), and it does not catch a config with no tools enabled — that still exits `0`.
+
+Details: [references/trustworthy-results.md](references/trustworthy-results.md).
 
 #### Save output to file
 
@@ -354,10 +362,21 @@ codacy-analysis analyze --output-format json | jq '.errors'
 codacy-analysis analyze --output-format json | jq '.toolResults | map({toolId, status, issueCount, durationMs})'
 ```
 
+#### Before reporting "no issues"
+
+An empty `issues` array only means something if the tools actually ran:
+
+```bash
+codacy-analysis analyze --fail-if-missing --output-format json \
+  | jq '{blocked: [.errors[].kind], executed: [.toolResults[].toolId], skipped: [.capability.unavailable[].toolId]}'
+```
+
+Empty `executed` means nothing was scanned — **unverified, not clean**. Always name the tools behind a clean result.
+
 **Exit codes:**
-- `0` — Success, no issues found
+- `0` — No issues found — trustworthy only if `toolResults` is non-empty
 - `1` — Issues found
-- `2` — Execution error (tool crash, missing dependency, etc.)
+- `2` — Execution error: unavailable tools in strict mode, conflicting flags, bad `--diff` base, or tool crash (check `errors[].kind`). Never means clean.
 
 ## Common workflows
 
@@ -370,16 +389,20 @@ codacy-analysis analyze --install-dependencies --output-format json
 
 ### Scan only changed files (e.g., before a commit)
 
+Gate checks, so include `--fail-if-missing`:
+
 ```bash
 # Staged files only (pre-commit check)
-codacy-analysis analyze --staged --output-format json
+codacy-analysis analyze --staged --fail-if-missing --output-format json
 
 # All changes on the current branch
-codacy-analysis analyze --diff --output-format json
+codacy-analysis analyze --diff --fail-if-missing --output-format json
 
 # Changes in a pull request
-codacy-analysis analyze --pr --output-format json
+codacy-analysis analyze --pr --fail-if-missing --output-format json
 ```
+
+Exit `2` means the check didn't run, not that the code is clean: install the missing tools (`--install-dependencies`, a separate run) and retry. Omit `--fail-if-missing` only for exploratory scans.
 
 ### Reproduce Codacy remote analysis locally
 
@@ -443,6 +466,8 @@ codacy-analysis analyze --tool RuboCop --tool Reek --tool Brakeman --output-form
 | Permission errors on `~/.codacy/` | Directory ownership mismatch | Check permissions: `ls -la ~/.codacy/` |
 | Inspect shows tool as `bundled` but it fails | Bundled library tool has dependency issue | Check `--log-level debug` output; may need `npm rebuild` |
 | Different results than Codacy Cloud | Different tool versions or pattern config | Use `init --remote` to sync config; check tool versions in inspect output |
+| Exit `2`, `errors[].kind == "UnavailableTools"` | Strict mode and a tool can't run | Run `--install-dependencies`, or scope with `--tool <id>` |
+| Clean result but nothing scanned | No tools enabled for the changed files | Check `toolResults` is non-empty; re-run `init` |
 
 ### Reading logs
 
